@@ -2,6 +2,8 @@
 
 **English** | [العربية](README.ar.md)
 
+Known in Arabic as **زخم** (Zakhm), meaning "momentum".
+
 An Android app that shows your car's speed and G-force using your phone's sensors, with optional speed from OBD-II or Android Auto. No account, no ads and no extra hardware required.
 
 <p align="center">
