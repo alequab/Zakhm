@@ -19,10 +19,8 @@
 </div>
 
 <p align="center">
-  <img src="docs/images/portrait.png" alt="التطبيق بالوضع الرأسي أثناء انتظار إشارة GPS" height="520">
-</p>
-<p align="center">
-  <img src="docs/images/landscape.png" alt="التطبيق بالوضع الأفقي" width="720">
+  <img src="docs/images/portrait-ar.png" alt="لوحة العدادات بالعربية أثناء انتظار إشارة GPS" height="520">
+  <img src="docs/images/settings-ar.png" alt="الإعدادات بالعربية" height="520">
 </p>
 
 <div dir="rtl">
@@ -119,7 +117,14 @@
 
 **SpeedG**, known in Arabic as **زخم** (Zakhm, meaning "momentum"), is an Android app that shows your car's speed and G-force using your phone's sensors, with optional speed from OBD-II or Android Auto. No account, no ads and no extra hardware required. The app is available in Arabic and English.
 
-*Screenshots are shown in the Arabic section above. They were taken indoors while parked, so the app is still waiting for a GPS signal and no speed is shown.*
+<p align="center">
+  <img src="docs/images/portrait.png" alt="SpeedG in portrait, waiting for a GPS signal" height="520">
+</p>
+<p align="center">
+  <img src="docs/images/landscape.png" alt="SpeedG in landscape" width="720">
+</p>
+
+*Screenshots were taken indoors while parked, so the app is still waiting for a GPS signal and no speed is shown.*
 
 > **Project status:** SpeedG has run on an Android 13 phone, and its calculations pass tests on simulated drives. It has not been checked on a real drive yet, so its road accuracy is still unmeasured. OBD-II and Android Auto have not been tested with a real car or adapter.
 
