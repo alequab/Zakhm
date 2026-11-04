@@ -7,22 +7,22 @@ plugins {
 
 // Kept outside the project so the signing key can never be committed.
 val signing = Properties().apply {
-    val file = File(System.getProperty("user.home"), ".speedg/signing.properties")
+    val file = File(System.getProperty("user.home"), ".zakhm/signing.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
-    namespace = "app.speedg"
+    namespace = "app.zakhm"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.speedg"
+        applicationId = "app.zakhm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.3.1"
+        versionCode = 8
+        versionName = "1.4.0"
 
-        val updateUrl = providers.gradleProperty("speedgUpdateUrl").getOrElse("")
+        val updateUrl = providers.gradleProperty("zakhmUpdateUrl").getOrElse("")
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
     }
 

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SpeedG"
+rootProject.name = "Zakhm"
 include(":app")

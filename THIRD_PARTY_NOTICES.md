@@ -1,6 +1,6 @@
 # Third-party notices
 
-SpeedG's own license does not apply to these components. Each remains under its own license, and copyright stays with its owners.
+Zakhm's own license does not apply to these components. Each remains under its own license, and copyright stays with its owners.
 
 | Component | Used for | Owner | License |
 |---|---|---|---|
