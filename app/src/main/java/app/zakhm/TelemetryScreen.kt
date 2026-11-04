@@ -1,14 +1,13 @@
 package app.zakhm
 
+import android.app.Activity
 import android.view.View
 import androidx.annotation.StringRes
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -22,11 +21,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,49 +38,59 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 
 import app.zakhm.core.CalibrationState
 import app.zakhm.core.CarIdentity
 import app.zakhm.core.CarProfile
 import app.zakhm.core.CarRegistry
+import app.zakhm.core.CarTheme
 import app.zakhm.core.SpeedInput
 import app.zakhm.core.SpeedSource
 import app.zakhm.core.TelemetrySnapshot
@@ -120,6 +133,8 @@ class ScreenActions(
     val setUseMph: (Boolean) -> Unit,
     val setRotation: (RotationMode) -> Unit,
     val setLanguage: (AppLanguage) -> Unit,
+    /** The second value says whether the change is final and worth saving. */
+    val setTheme: (CarTheme, Boolean) -> Unit,
     val selectInput: (SpeedInput) -> Unit,
     val selectObdDevice: (String) -> Unit,
     val requestBluetooth: () -> Unit,
@@ -137,15 +152,6 @@ class ScreenActions(
     val dismissUpdate: () -> Unit,
 )
 
-private val Background = Color(0xFF07090D)
-private val Panel = Color(0xFF12161D)
-private val PanelEdge = Color(0xFF232A35)
-private val Primary = Color(0xFFF4F6F8)
-private val Secondary = Color(0xFF8B97A5)
-private val Track = Color(0xFF29313C)
-private val Accent = Color(0xFFFFB020)
-private val Good = Color(0xFF4CD787)
-private val Alert = Color(0xFFFF5A47)
 
 /** Equal-width digits, so numbers don't jitter sideways as they change. */
 private val TabularDigits = TextStyle(fontFeatureSettings = "tnum")
@@ -158,8 +164,16 @@ private const val HIGH_G = 0.6
 private const val TRAIL_POINTS = 40
 private const val GAUGE_START_DEGREES = 135f
 private const val GAUGE_SWEEP_DEGREES = 270f
+private const val MAX_INSTRUMENT_FONT_SCALE = 1.25f
+private const val STATUS_SCROLLS = 3
+private const val STATUS_SCROLL_PAUSE_MS = 2000
+private val NoReadings = TelemetrySnapshot()
 
-private fun Modifier.panel() = background(Panel, PanelShape).border(1.dp, PanelEdge, PanelShape)
+/** How much of the gauge's square its arc reaches down to, including the arc's glow. */
+private const val GAUGE_DRAWN_HEIGHT = 0.88f
+
+@Composable
+internal fun Modifier.panel() = background(Panel, PanelShape).border(1.dp, PanelEdge, PanelShape)
 
 /** Letter spacing for small labels. Arabic letters must stay joined, so it gets none. */
 @Composable
@@ -179,7 +193,19 @@ fun TelemetryScreen(
     settings: ScreenSettings,
     actions: ScreenActions,
 ) {
-    MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Background, surface = Panel)) {
+    val theme = state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT
+    DashTheme(theme) {
+        val light = LocalDash.current.isLight
+        val view = LocalView.current
+        DisposableEffect(light) {
+            (view.context as? Activity)?.window?.let { window ->
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = light
+                    isAppearanceLightNavigationBars = light
+                }
+            }
+            onDispose {}
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -259,15 +285,19 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val s = state.snapshot
 
+    // These are instruments with fixed room, so very large system text would only clip them.
+    val density = LocalDensity.current
+    val instrumentDensity = remember(density) { Density(density.density, min(density.fontScale, MAX_INSTRUMENT_FONT_SCALE)) }
+    CompositionLocalProvider(LocalDensity provides instrumentDensity) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         if (maxWidth > maxHeight) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Header(state, settings.useMph) { showSettings = true }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Zakhmauge(s, settings.useMph, Modifier.weight(1f).fillMaxHeight())
+                    SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight())
                     GMeter(s, Modifier.weight(1f).fillMaxHeight())
                     Column(
-                        Modifier.width(112.dp).fillMaxHeight(),
+                        Modifier.width(92.dp).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxWidth())
@@ -280,9 +310,9 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
         } else {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Header(state, settings.useMph) { showSettings = true }
-                Zakhmauge(s, settings.useMph, Modifier.fillMaxWidth().weight(1.1f))
+                SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(1f))
                 GMeter(s, Modifier.fillMaxWidth().weight(1f))
-                Row(Modifier.fillMaxWidth().height(68.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth().height(60.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxHeight())
                     PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxHeight())
                     PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxHeight())
@@ -290,6 +320,7 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                 }
             }
         }
+    }
     }
 
     if (showSettings) {
@@ -355,10 +386,14 @@ private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).background(statusColor, CircleShape))
                 Spacer(Modifier.width(8.dp))
-                Text(statusText, color = Primary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            calibrationHint(s)?.let {
-                Text(it, color = Accent, fontSize = 12.sp, maxLines = 2, modifier = Modifier.padding(top = 2.dp))
+                // Scrolls a few times if it doesn't fit, then stops, as moving text redraws the whole screen.
+                Text(
+                    statusText,
+                    Modifier.basicMarquee(iterations = STATUS_SCROLLS, repeatDelayMillis = STATUS_SCROLL_PAUSE_MS),
+                    color = Primary,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                )
             }
         }
         if (state.recording) {
@@ -378,12 +413,14 @@ private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () 
 
 @Composable
 private fun SlidersIcon() {
+    val line = Secondary
+    val knobColor = Primary
     Canvas(Modifier.size(22.dp)) {
         val stroke = 2.dp.toPx()
         listOf(0.22f to 0.68f, 0.5f to 0.3f, 0.78f to 0.6f).forEach { (y, knob) ->
             val rowY = size.height * y
-            drawLine(Secondary, Offset(0f, rowY), Offset(size.width, rowY), stroke, StrokeCap.Round)
-            drawCircle(Primary, 3.2.dp.toPx(), Offset(size.width * knob, rowY))
+            drawLine(line, Offset(0f, rowY), Offset(size.width, rowY), stroke, StrokeCap.Round)
+            drawCircle(knobColor, 3.2.dp.toPx(), Offset(size.width * knob, rowY))
         }
     }
 }
@@ -442,101 +479,102 @@ private fun unitFactor(useMph: Boolean) = if (useMph) 2.23694 else 3.6
 @Composable
 private fun unitLabel(useMph: Boolean) = stringResource(if (useMph) R.string.unit_mph else R.string.unit_kmh)
 
-private fun formatG(value: Double?) = value?.let { "%.2f".format(Locale.US, it) } ?: "--"
+private fun formatG(value: Double?) = value?.takeIf { it.isFinite() }?.let { "%.2f".format(Locale.US, it) } ?: "--"
 
 @Composable
-private fun Zakhmauge(s: TelemetrySnapshot, useMph: Boolean, modifier: Modifier) {
+private fun SpeedDial(s: TelemetrySnapshot, useMph: Boolean, modifier: Modifier) {
     val maxSpeed = if (useMph) 160 else 240
     val labelStep = if (useMph) 20 else 40
-    val displayed = s.speedMps?.let { it * unitFactor(useMph) }
-    val fraction by animateFloatAsState(
-        targetValue = ((displayed ?: 0.0) / maxSpeed).coerceIn(0.0, 1.0).toFloat(),
-        animationSpec = tween(120),
-        label = "speed",
-    )
+    val displayed = s.speedMps?.takeIf { it.isFinite() }?.let { it * unitFactor(useMph) }
+    // Already filtered and arriving 20 times a second, so it looks smooth without animating every screen refresh.
+    val fraction = ((displayed ?: 0.0) / maxSpeed).coerceIn(0.0, 1.0).toFloat()
+    val currentFraction by rememberUpdatedState(fraction)
+    val colors = LocalDash.current
     val valueColor = when (s.speedSource) {
-        SpeedSource.ESTIMATED -> Accent
-        SpeedSource.ACQUIRING, SpeedSource.NO_SIGNAL -> Secondary
-        SpeedSource.LIVE, SpeedSource.STOPPED -> Primary
+        SpeedSource.ESTIMATED -> colors.accent
+        SpeedSource.ACQUIRING, SpeedSource.NO_SIGNAL -> colors.secondary
+        SpeedSource.LIVE, SpeedSource.STOPPED -> colors.primary
     }
     val measurer = rememberTextMeasurer()
+    val face = Modifier.drawWithCache {
+        val stroke = size.minDimension * 0.05f
+        val radius = size.minDimension / 2 - stroke
+        val center = Offset(size.width / 2, size.height / 2)
+        val arcTopLeft = Offset(center.x - radius, center.y - radius)
+        val arcSize = Size(radius * 2, radius * 2)
+        val labelStyle = TextStyle(color = colors.secondary, fontSize = (size.minDimension * 0.036f).toSp())
+        val ticks = (0..maxSpeed step labelStep / 2).map { value ->
+            val radians = Math.toRadians((GAUGE_START_DEGREES + GAUGE_SWEEP_DEGREES * value / maxSpeed).toDouble())
+            val direction = Offset(cos(radians).toFloat(), sin(radians).toFloat())
+            val major = value % labelStep == 0
+            GaugeTick(
+                from = center + direction * (radius - stroke),
+                to = center + direction * (radius - stroke * (if (major) 2.1f else 1.6f)),
+                major = major,
+                label = if (major) measurer.measure(value.toString(), labelStyle) else null,
+                labelCenter = center + direction * (radius - stroke * 3.3f),
+            )
+        }
+        val trackStroke = Stroke(stroke, cap = StrokeCap.Round)
+        val glowStroke = Stroke(stroke * 2.2f, cap = StrokeCap.Round)
+        val majorWidth = 2.dp.toPx()
+        val minorWidth = 1.dp.toPx()
 
-    BoxWithConstraints(modifier.panel().padding(10.dp), contentAlignment = Alignment.Center) {
-        val side = min(maxWidth.value, maxHeight.value)
-        Box(Modifier.size(side.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val stroke = size.minDimension * 0.045f
-                val radius = size.minDimension / 2 - stroke
-                val center = Offset(size.width / 2, size.height / 2)
-                val arcTopLeft = Offset(center.x - radius, center.y - radius)
-                val arcSize = Size(radius * 2, radius * 2)
-
-                drawArc(
-                    Track,
-                    GAUGE_START_DEGREES,
-                    GAUGE_SWEEP_DEGREES,
-                    false,
-                    arcTopLeft,
-                    arcSize,
-                    style = Stroke(stroke, cap = StrokeCap.Round),
+        onDrawBehind {
+            drawArc(colors.track, GAUGE_START_DEGREES, GAUGE_SWEEP_DEGREES, false, arcTopLeft, arcSize, style = trackStroke)
+            if (currentFraction > 0f) {
+                val sweep = GAUGE_SWEEP_DEGREES * currentFraction
+                drawArc(colors.accent.copy(alpha = 0.18f), GAUGE_START_DEGREES, sweep, false, arcTopLeft, arcSize, style = glowStroke)
+                drawArc(colors.accent, GAUGE_START_DEGREES, sweep, false, arcTopLeft, arcSize, style = trackStroke)
+            }
+            ticks.forEach { tick ->
+                drawLine(
+                    if (tick.major) colors.secondary else colors.track,
+                    tick.from,
+                    tick.to,
+                    if (tick.major) majorWidth else minorWidth,
                 )
-                if (fraction > 0f) {
-                    drawArc(
-                        Accent.copy(alpha = 0.18f),
-                        GAUGE_START_DEGREES,
-                        GAUGE_SWEEP_DEGREES * fraction,
-                        false,
-                        arcTopLeft,
-                        arcSize,
-                        style = Stroke(stroke * 2.2f, cap = StrokeCap.Round),
+                tick.label?.let { label ->
+                    drawText(
+                        label,
+                        topLeft = Offset(
+                            tick.labelCenter.x - label.size.width / 2f,
+                            tick.labelCenter.y - label.size.height / 2f,
+                        ),
                     )
-                    drawArc(
-                        Accent,
-                        GAUGE_START_DEGREES,
-                        GAUGE_SWEEP_DEGREES * fraction,
-                        false,
-                        arcTopLeft,
-                        arcSize,
-                        style = Stroke(stroke, cap = StrokeCap.Round),
-                    )
-                }
-
-                for (value in 0..maxSpeed step labelStep / 2) {
-                    val radians = Math.toRadians(
-                        (GAUGE_START_DEGREES + GAUGE_SWEEP_DEGREES * value / maxSpeed).toDouble(),
-                    )
-                    val direction = Offset(cos(radians).toFloat(), sin(radians).toFloat())
-                    val major = value % labelStep == 0
-                    val inner = radius - stroke * (if (major) 2.1f else 1.6f)
-                    drawLine(
-                        if (major) Secondary else Track,
-                        center + direction * (radius - stroke),
-                        center + direction * inner,
-                        (if (major) 2.dp else 1.dp).toPx(),
-                    )
-                    if (major) {
-                        val label = measurer.measure(
-                            value.toString(),
-                            TextStyle(color = Secondary, fontSize = (size.minDimension * 0.026f).toSp()),
-                        )
-                        val at = center + direction * (radius - stroke * 3.6f)
-                        drawText(
-                            label,
-                            topLeft = Offset(at.x - label.size.width / 2f, at.y - label.size.height / 2f),
-                        )
-                    }
                 }
             }
-            SpeedNumber(displayed, valueColor, (side * 0.27f).sp, (side * 0.15f).sp, unitLabel(useMph))
+        }
+    }
+
+    BoxWithConstraints(modifier.panel().padding(4.dp), contentAlignment = Alignment.Center) {
+        // The circle is open at the bottom, so it can be larger than the room and let that empty part overhang.
+        val side = min(maxWidth.value, maxHeight.value / GAUGE_DRAWN_HEIGHT)
+        val overhang = (side - maxHeight.value).coerceAtLeast(0f) / 2
+        Box(
+            Modifier.offset(y = overhang.dp).requiredSize(side.dp).then(face),
+            contentAlignment = Alignment.Center,
+        ) {
+            val density = LocalDensity.current
+            val (big, small) = with(density) { (side * 0.27f).dp.toSp() to (side * 0.15f).dp.toSp() }
+            SpeedNumber(displayed, valueColor, big, small, unitLabel(useMph))
         }
     }
 }
+
+private class GaugeTick(
+    val from: Offset,
+    val to: Offset,
+    val major: Boolean,
+    val label: TextLayoutResult?,
+    val labelCenter: Offset,
+)
 
 @Composable
 private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize: TextUnit, unit: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = value?.roundToInt()?.toString() ?: "--",
+            text = value?.takeIf { it.isFinite() }?.roundToInt()?.toString() ?: "--",
             color = color,
             fontSize = if (value != null) size else emptySize,
             lineHeight = size,
@@ -563,25 +601,26 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
         }
     }
     val total = s.totalG ?: 0.0
-    val dotColor = if (total >= HIGH_G) Alert else Accent
+    val colors = LocalDash.current
+    val dotColor = if (total >= HIGH_G) colors.alert else colors.accent
 
-    Box(modifier.panel().padding(10.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.panel().padding(4.dp), contentAlignment = Alignment.Center) {
         // Left and right here are the car's real directions, so they never mirror for Arabic.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Box(Modifier.aspectRatio(1f, matchHeightConstraintsFirst = true), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize().padding(18.dp)) {
+                Canvas(Modifier.fillMaxSize().padding(13.dp)) {
                     val radius = size.minDimension / 2
                     val center = Offset(size.width / 2, size.height / 2)
                     listOf(0.25, 0.5, 0.75, 1.0).forEach { g ->
                         drawCircle(
-                            if (g == 1.0) Secondary.copy(alpha = 0.6f) else Track,
+                            if (g == 1.0) colors.secondary.copy(alpha = 0.6f) else colors.track,
                             (radius * g / METER_RANGE_G).toFloat(),
                             center,
                             style = Stroke(1.dp.toPx()),
                         )
                     }
-                    drawLine(Track, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), 1.dp.toPx())
-                    drawLine(Track, Offset(center.x, center.y - radius), Offset(center.x, center.y + radius), 1.dp.toPx())
+                    drawLine(colors.track, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), 1.dp.toPx())
+                    drawLine(colors.track, Offset(center.x, center.y - radius), Offset(center.x, center.y + radius), 1.dp.toPx())
 
                     trail.forEachIndexed { i, point ->
                         val age = (i + 1f) / trail.size
@@ -597,10 +636,19 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
                 MeterLabel(R.string.meter_brake, Alignment.BottomCenter)
                 MeterLabel(R.string.meter_left, Alignment.CenterStart)
                 MeterLabel(R.string.meter_right, Alignment.CenterEnd)
-                if (long == null) Text(stringResource(R.string.calibrating), color = Secondary, fontSize = 13.sp)
+                // In the circle's empty middle, so the gauges keep their size when it comes and goes.
+                if (long == null) {
+                    Text(
+                        calibrationHint(s) ?: stringResource(R.string.calibrating),
+                        Modifier.padding(horizontal = 44.dp).background(Panel).padding(4.dp),
+                        color = Accent,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
-        Column(Modifier.align(Alignment.TopStart)) {
+        Column(Modifier.align(Alignment.TopStart).padding(6.dp)) {
             Text(
                 formatG(s.totalG),
                 color = Primary,
@@ -628,7 +676,8 @@ private fun meterPoint(lateralG: Double, longitudinalG: Double): Offset {
 private fun BoxScope.MeterLabel(@StringRes text: Int, alignment: Alignment) {
     Text(
         stringResource(text),
-        Modifier.align(alignment),
+        // Sits on the outer ring, so it needs a clean gap in the line to stay readable.
+        Modifier.align(alignment).background(Panel).padding(horizontal = 3.dp),
         color = Secondary,
         fontSize = 10.sp,
         letterSpacing = labelSpacing(1.sp),
@@ -662,7 +711,12 @@ private fun SettingsSheet(
     actions: ScreenActions,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Panel) {
+    // Live readings change 20 times a second, and nothing in here shows them.
+    val withoutReadings = state.copy(snapshot = NoReadings, satellitesUsed = null, recordingSeconds = 0)
+    val state = remember(withoutReadings) { withoutReadings }
+    // Half a sheet leaves almost no room in landscape.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Panel) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -671,6 +725,11 @@ private fun SettingsSheet(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             CarSettings(state, actions)
+
+            ThemeSettings(
+                state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT,
+                actions.setTheme,
+            )
 
             SectionTitle(R.string.section_source)
             ChoiceRow(
@@ -821,8 +880,14 @@ private fun ObdSettings(state: TelemetryUiState, settings: ScreenSettings, actio
         actions.scanForAdapters,
         Modifier.fillMaxWidth(),
     )
-    if (settings.obdDevices.isEmpty() && !settings.scanningForAdapters) {
+    // A Bluetooth LE adapter isn't paired, so it's only listed during a scan. Still show the one in use.
+    val saved = state.obdAddress
+    val savedIsListed = settings.obdDevices.any { it.address == saved }
+    if (settings.obdDevices.isEmpty() && saved == null && !settings.scanningForAdapters) {
         Hint(stringResource(R.string.obd_none_found))
+    }
+    if (saved != null && !savedIsListed) {
+        ChoiceChip(stringResource(R.string.obd_saved_adapter), true, Modifier.fillMaxWidth()) {}
     }
     settings.obdDevices.forEach { device ->
         ChoiceChip(device.name, device.address == state.obdAddress, Modifier.fillMaxWidth()) {
@@ -832,7 +897,7 @@ private fun ObdSettings(state: TelemetryUiState, settings: ScreenSettings, actio
 }
 
 @Composable
-private fun SectionTitle(@StringRes text: Int) {
+internal fun SectionTitle(@StringRes text: Int) {
     Text(
         stringResource(text).uppercase(Locale.US),
         color = Secondary,
@@ -843,12 +908,12 @@ private fun SectionTitle(@StringRes text: Int) {
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     Text(text, color = Secondary, fontSize = 13.sp)
 }
 
 @Composable
-private fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+internal fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { (value, label) ->
             ChoiceChip(label, value == selected, Modifier.weight(1f)) { onSelect(value) }
@@ -861,15 +926,17 @@ private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier, onC
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier
-            .background(if (selected) Accent else Color.Transparent, shape)
+            .clip(shape)
+            .background(if (selected) Accent else Color.Transparent)
             .border(1.dp, if (selected) Accent else PanelEdge, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
+            .selectable(selected, role = Role.RadioButton, onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = if (selected) Background else Primary,
+            color = if (selected) OnAccent else Primary,
             fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
@@ -879,7 +946,7 @@ private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier, onC
 }
 
 @Composable
-private fun CompactButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun CompactButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier,

@@ -3,6 +3,7 @@ package app.zakhm.core
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.exp
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -91,9 +92,17 @@ class TelemetryEngine {
     private var smoothing1 = Vec3.ZERO
     private var smoothing2 = Vec3.ZERO
     private var smoothedAccel: Vec3? = null
+    private var peakSignal: Vec3? = null
     private var peaks = Peaks()
 
+    private var mountCheckTime = Double.NaN
+    private var mountCheckSpeed = 0.0
+    private var mountMismatches = 0
+    private var peaksBeforeMismatch = Peaks()
+
     fun onGyro(time: Double, gyro: Vec3) {
+        // One bad reading would otherwise poison every estimate that follows it.
+        if (!time.isFinite() || !gyro.isFinite) return
         now = max(now, time)
         rawGyro = gyro
         val previous = lastGyroTime
@@ -107,6 +116,7 @@ class TelemetryEngine {
     }
 
     fun onAccel(time: Double, force: Vec3) {
+        if (!time.isFinite() || !force.isFinite) return
         now = max(now, time)
         val previous = lastAccelTime
         lastAccelTime = time
@@ -138,12 +148,17 @@ class TelemetryEngine {
     fun onSpeedFix(fix: SpeedFix) {
         gpsHorizontalAccuracy = fix.horizontalAccuracy
         gpsSpeedAccuracy = fix.speedAccuracy
-        val measured = fix.speed ?: return
-        val sigma = fix.speedAccuracy?.takeIf { it > 0.0 } ?: DEFAULT_GPS_SIGMA
+        val measured = fix.speed?.takeIf { it.isFinite() } ?: return
+        val sigma = fix.speedAccuracy?.takeIf { it > 0.0 && it.isFinite() } ?: DEFAULT_GPS_SIGMA
         if (sigma > MAX_GPS_SIGMA) return
 
         // Trust the fix's own timestamp unless it's clearly on a different clock.
-        val fixTime = if (fix.time < now - MAX_FIX_AGE || fix.time > now + MAX_FIX_LEAD) now else fix.time
+        val fixTime = if (!fix.time.isFinite() || fix.time < now - MAX_FIX_AGE || fix.time > now + MAX_FIX_LEAD) now else fix.time
+        if (mountWasMoved(fixTime, measured)) {
+            resetMount()
+            peaks = peaksBeforeMismatch
+            speedFilter.restartFrom(measured, max(sigma, MIN_GPS_SIGMA))
+        }
         val predicted = history.speedAt(fixTime)?.plus(speedFilter.cumulativeCorrection)
 
         val accepted = speedFilter.update(measured, max(sigma, MIN_GPS_SIGMA), predicted ?: speedFilter.speed)
@@ -162,6 +177,7 @@ class TelemetryEngine {
 
     fun resetPeaks() {
         peaks = Peaks()
+        peaksBeforeMismatch = peaks
     }
 
     fun mountCalibration(): MountCalibration? = mountUp?.let { MountCalibration(it, forward) }
@@ -179,6 +195,8 @@ class TelemetryEngine {
         gravityUp = mount?.up
         forward = mount?.forward
         peaks = savedPeaks
+        peaksBeforeMismatch = savedPeaks
+        peakSignal = null
         stopped = false
         lastStopCheck = Double.NEGATIVE_INFINITY
     }
@@ -253,10 +271,15 @@ class TelemetryEngine {
         smoothing2 += (smoothing1 - smoothing2) * alpha
         smoothedAccel = smoothing2
 
+        // A pothole or a shaky mount lasts a moment, while a car's real forces build over a few tenths of a second.
+        val peakAlpha = 1.0 - exp(-dt * PEAK_SMOOTHING_RATE)
+        val held = peakSignal?.let { it + (smoothing2 - it) * peakAlpha } ?: smoothing2
+        peakSignal = held
+
         val up = mountUp ?: return
         val fwd = forward ?: return
-        val longitudinal = (smoothing2 dot fwd) / STANDARD_GRAVITY
-        val lateral = (smoothing2 dot (up cross fwd)) / STANDARD_GRAVITY
+        val longitudinal = (held dot fwd) / STANDARD_GRAVITY
+        val lateral = (held dot (up cross fwd)) / STANDARD_GRAVITY
         peaks = Peaks(
             accel = max(peaks.accel, longitudinal),
             brake = max(peaks.brake, -longitudinal),
@@ -287,11 +310,57 @@ class TelemetryEngine {
         }
 
         // With GPS also saying stopped, allow a rough idle, and only rule out someone moving the phone.
-        val forceLimit = if (gpsFresh) STOP_FORCE_STD else STOP_FORCE_STD_NO_GPS
-        val gyroLimit = if (gpsFresh) STOP_GYRO_STD else STOP_GYRO_STD_NO_GPS
+        // Harder to leave than to enter, so readings near a limit can't flip the state back and forth.
+        val hold = if (stopped) STOP_RELEASE_FACTOR else 1.0
+        val forceLimit = (if (gpsFresh) STOP_FORCE_STD else STOP_FORCE_STD_NO_GPS) * hold
+        val gyroLimit = (if (gpsFresh) STOP_GYRO_STD else STOP_GYRO_STD_NO_GPS) * hold
         val turning = (w.meanGyro - gyroBias).norm
-        stopped = w.forceStd < forceLimit && w.gyroStd < gyroLimit && turning < STOP_GYRO_MEAN
+        stopped = w.forceStd < forceLimit && w.gyroStd < gyroLimit && turning < STOP_GYRO_MEAN * hold
         if (stopped) onStopped(w)
+    }
+
+    /**
+     * Notices a phone that moved while the car was moving, which the check at a stop
+     * can't see. The car's speed says how hard it's really accelerating, so a large,
+     * lasting disagreement with the sensors means the saved axes no longer fit.
+     */
+    private fun mountWasMoved(fixTime: Double, measured: Double): Boolean {
+        val previousTime = mountCheckTime
+        if (!previousTime.isNaN() && fixTime - previousTime < MIN_ANCHOR_SPACING) return false
+        val previousSpeed = mountCheckSpeed
+        mountCheckTime = fixTime
+        mountCheckSpeed = measured
+        val up = mountUp
+        val tracked = gravityUp
+        val interval = fixTime - previousTime
+        val averageSpeed = (measured + previousSpeed) / 2
+        if (up == null || tracked == null || previousTime.isNaN() || interval > MAX_ANCHOR_SPACING ||
+            averageSpeed < MIN_LEARNING_SPEED
+        ) {
+            mountMismatches = 0
+            peaksBeforeMismatch = peaks
+            return false
+        }
+        val w = history.window(previousTime, fixTime) ?: return false
+        val speedChangeRate = (measured - previousSpeed) / interval
+        val turnAccel = averageSpeed * ((w.meanGyro - gyroBias) dot tracked)
+        val motion = w.meanForce - tracked * gravityMagnitude
+        val fwd = forward
+        val unexplained = if (fwd != null) {
+            (motion - fwd * speedChangeRate - (up cross fwd) * turnAccel).norm
+        } else {
+            motion.norm - hypot(speedChangeRate, turnAccel)
+        }
+        val mismatch = unexplained > MAX_UNEXPLAINED_ACCEL || angleBetween(up, tracked) > MOUNT_MOVED_RADIANS
+        if (!mismatch) {
+            mountMismatches = 0
+            peaksBeforeMismatch = peaks
+            return false
+        }
+        mountMismatches++
+        if (mountMismatches < MOUNT_MISMATCHES_NEEDED) return false
+        mountMismatches = 0
+        return true
     }
 
     private fun onStopped(w: WindowStats) {
@@ -317,8 +386,10 @@ class TelemetryEngine {
         learner.reset()
         anchorTime = Double.NaN
         smoothedAccel = null
+        peakSignal = null
         cruisingForce = Vec3.ZERO
         cruisingSamples = 0
+        mountMismatches = 0
     }
 
     /**
@@ -327,13 +398,15 @@ class TelemetryEngine {
      */
     private fun learnUpWhileCruising(w: WindowStats, speedChangeRate: Double, averageSpeed: Double) {
         val steady = averageSpeed >= MIN_LEARNING_SPEED &&
-            abs(speedChangeRate) < MAX_CRUISING_RATE &&
+            abs(speedChangeRate) < CRUISING_BROKEN_RATE &&
             (w.meanGyro - gyroBias).norm < MAX_CRUISING_TURN
         if (!steady) {
             cruisingForce = Vec3.ZERO
             cruisingSamples = 0
             return
         }
+        // GPS speed noise alone can look like this, so it only skips the interval instead of starting over.
+        if (abs(speedChangeRate) >= MAX_CRUISING_RATE) return
         cruisingForce += w.meanForce
         cruisingSamples++
         if (cruisingSamples >= CRUISING_SAMPLES_NEEDED) {
@@ -398,8 +471,11 @@ class TelemetryEngine {
         const val MAX_ESTIMATE_SECONDS = 12.0
         const val MAX_ESTIMATE_SIGMA = 3.0
 
-        /** Gives roughly a 5 Hz cutoff through the two cascaded filters. */
-        const val SMOOTHING_RATE = 2 * Math.PI * 5.0 * 1.55
+        /** Gives roughly a 3 Hz cutoff through the two cascaded filters, below most mount and engine shake. */
+        const val SMOOTHING_RATE = 2 * Math.PI * 3.0 * 1.55
+
+        /** What a peak must get through, on top of the smoothing above. */
+        const val PEAK_SMOOTHING_RATE = 2 * Math.PI * 2.0
 
         const val STOP_CHECK_INTERVAL = 0.1
         const val STOP_WINDOW_SECONDS = 1.5
@@ -414,6 +490,11 @@ class TelemetryEngine {
 
         /** More than any road slope: if gravity has moved this far, the phone was moved. */
         const val MOUNT_MOVED_RADIANS = 20.0 * Math.PI / 180.0
+        const val STOP_RELEASE_FACTOR = 1.5
+
+        /** About 0.25 G that speed changes and turning can't account for. */
+        const val MAX_UNEXPLAINED_ACCEL = 2.5
+        const val MOUNT_MISMATCHES_NEEDED = 3
 
         const val MIN_ANCHOR_SPACING = 0.8
         const val MAX_ANCHOR_SPACING = 2.5
@@ -422,6 +503,7 @@ class TelemetryEngine {
         const val MAX_LEARNING_YAW_RATE = 0.06
         const val MIN_LEARNING_TURN = 0.5
         const val MAX_CRUISING_RATE = 0.2
+        const val CRUISING_BROKEN_RATE = 0.6
         const val MAX_CRUISING_TURN = 0.03
         const val CRUISING_SAMPLES_NEEDED = 5
         const val MAX_GRAVITY_ERROR = 1.0

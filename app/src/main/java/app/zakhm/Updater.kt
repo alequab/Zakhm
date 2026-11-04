@@ -106,7 +106,7 @@ object Updater {
         context.startActivity(page.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    /** Hands the APK to Android's installer. The answer arrives in [InstallReceiver]. */
+    /** Hands the APK to Android's installer. The answer arrives in [InstallResultActivity]. */
     fun install(context: Context, apk: File) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
@@ -119,10 +119,10 @@ object Updater {
                     session.fsync(output)
                 }
             }
-            val result = Intent(context, InstallReceiver::class.java)
+            val result = Intent(context, InstallResultActivity::class.java)
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
-            session.commit(PendingIntent.getBroadcast(context, id, result, flags).intentSender)
+            session.commit(PendingIntent.getActivity(context, id, result, flags).intentSender)
         }
     }
 

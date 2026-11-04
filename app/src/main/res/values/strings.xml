@@ -57,6 +57,27 @@
     <string name="section_screen">Screen</string>
     <string name="section_language">Language</string>
     <string name="section_tools">Tools</string>
+    <string name="section_theme">Theme</string>
+
+    <string name="theme_hint">Match the dashboard to your car. Each car keeps its own theme, and it switches with the car.</string>
+    <string name="theme_amber">Amber</string>
+    <string name="theme_red">Red</string>
+    <string name="theme_orange">Orange</string>
+    <string name="theme_yellow">Yellow</string>
+    <string name="theme_green">Green</string>
+    <string name="theme_blue">Blue</string>
+    <string name="theme_silver">Silver</string>
+    <string name="theme_white">White</string>
+    <string name="theme_customize">Edit colours</string>
+    <string name="theme_done">Done</string>
+    <string name="theme_reset">Reset colours</string>
+    <string name="theme_part_accent">Accent</string>
+    <string name="theme_part_background">Background</string>
+    <string name="theme_part_panel">Panels</string>
+    <string name="theme_hue">Colour</string>
+    <string name="theme_saturation">Strength</string>
+    <string name="theme_brightness">Brightness</string>
+    <string name="theme_readable_hint">Colours too close to read are adjusted automatically, so the numbers stay clear.</string>
 
     <string name="car_default_name">My car</string>
     <string name="car_vin_name">Car %1$s</string>
@@ -100,7 +121,7 @@
     <string name="obd_none_found">No adapters found.</string>
     <string name="obd_scan">Scan for Bluetooth LE adapters</string>
     <string name="obd_scanning">Scanning…</string>
-
+    <string name="obd_saved_adapter">Saved adapter</string>
     <string name="rotation_auto">Auto</string>
     <string name="rotation_portrait">Portrait</string>
     <string name="rotation_landscape">Landscape</string>

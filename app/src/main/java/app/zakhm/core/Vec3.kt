@@ -18,6 +18,8 @@ data class Vec3(val x: Double, val y: Double, val z: Double) {
 
     val norm: Double get() = sqrt(this dot this)
 
+    val isFinite: Boolean get() = x.isFinite() && y.isFinite() && z.isFinite()
+
     fun normalized(): Vec3 {
         val n = norm
         return if (n > 1e-9) this * (1.0 / n) else this

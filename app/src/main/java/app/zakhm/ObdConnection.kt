@@ -45,7 +45,8 @@ class ObdConnection(
         // Cheap adapters often accept only one way of connecting, so keep trying each.
         var attempt = 0
         while (running) {
-            onState(ObdState.CONNECTING)
+            // After a failure, keep saying so during retries instead of flicking back to "connecting".
+            if (attempt == 0) onState(ObdState.CONNECTING)
             try {
                 val device = adapter.getRemoteDevice(address)
                 val types = linkTypesFor(device)
@@ -62,6 +63,10 @@ class ObdConnection(
                 if (running) onState(ObdState.FAILED)
             } catch (_: InterruptedException) {
                 return
+            } catch (_: RuntimeException) {
+                // Android's Bluetooth code can throw almost anything, and this thread must not take the app down.
+                attempt++
+                if (running) onState(ObdState.FAILED)
             } finally {
                 closeLink()
             }

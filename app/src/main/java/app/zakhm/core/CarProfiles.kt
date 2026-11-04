@@ -40,6 +40,7 @@ data class CarProfile(
     val obdAddress: String? = null,
     val mount: MountCalibration? = null,
     val peaks: Peaks = Peaks(),
+    val theme: CarTheme = CarTheme.DEFAULT,
 )
 
 /** The saved cars and which one is in use. There is always at least one. */
@@ -166,6 +167,9 @@ object CarProfileJson {
             .put("peakBrake", car.peaks.brake)
             .put("peakLeft", car.peaks.left)
             .put("peakRight", car.peaks.right)
+            .put("themeAccent", car.theme.accent)
+            .put("themeBackground", car.theme.background)
+            .put("themePanel", car.theme.panel)
         car.identityKey?.let { json.put("identityKey", it) }
         car.obdAddress?.let { json.put("obdAddress", it) }
         car.mount?.let { mount ->
@@ -189,6 +193,11 @@ object CarProfileJson {
             brake = json.optDouble("peakBrake", 0.0),
             left = json.optDouble("peakLeft", 0.0),
             right = json.optDouble("peakRight", 0.0),
+        ),
+        theme = CarTheme(
+            accent = json.optInt("themeAccent", CarTheme.DEFAULT.accent),
+            background = json.optInt("themeBackground", CarTheme.DEFAULT.background),
+            panel = json.optInt("themePanel", CarTheme.DEFAULT.panel),
         ),
     )
 

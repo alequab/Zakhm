@@ -1,0 +1,208 @@
+package app.zakhm
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertEquals
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onFirst
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.zakhm.core.CalibrationState
+import app.zakhm.core.CarProfile
+import app.zakhm.core.CarTheme
+import app.zakhm.core.Peaks
+import app.zakhm.core.SpeedInput
+import app.zakhm.core.SpeedSource
+import app.zakhm.core.TelemetrySnapshot
+import app.zakhm.core.ThemePreset
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+
+/**
+ * Draws the real screens without a phone, and saves them to `build/screens` to look
+ * at. A failure here means a screen crashed while being composed.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w393dp-h851dp-port-xxhdpi")
+class ScreenRenderTest {
+    @get:Rule
+    val compose = createAndroidComposeRule<ComponentActivity>()
+
+    private fun state(
+        theme: CarTheme = CarTheme.DEFAULT,
+        snapshot: TelemetrySnapshot = driving,
+    ) = TelemetryUiState(
+        snapshot = snapshot,
+        selectedInput = SpeedInput.OBD,
+        activeInput = SpeedInput.OBD,
+        obdState = ObdState.CONNECTED,
+        obdAddress = "00:11:22:33:44:55",
+        cars = listOf(CarProfile("a", "Picanto", input = SpeedInput.OBD, theme = theme)),
+        activeCarId = "a",
+        satellitesUsed = 18,
+    )
+
+    private val settings = ScreenSettings(
+        useMph = false,
+        rotation = RotationMode.AUTO,
+        obdDevices = emptyList(),
+        scanningForAdapters = false,
+        needsBluetoothPermission = false,
+        language = AppLanguage.ENGLISH,
+    )
+
+    private val actions = ScreenActions(
+        requestPermission = {},
+        calibrate = {},
+        resetPeaks = {},
+        setUseMph = {},
+        setRotation = {},
+        setLanguage = {},
+        setTheme = { _, _ -> },
+        selectInput = {},
+        selectObdDevice = {},
+        requestBluetooth = {},
+        scanForAdapters = {},
+        selectCar = {},
+        addCar = {},
+        renameCar = { _, _ -> },
+        deleteCar = {},
+        saveUnknownCarToCurrent = {},
+        saveUnknownCarAsNew = {},
+        skipUnknownCar = {},
+        toggleRecording = {},
+        shareRecording = {},
+        startUpdate = {},
+        dismissUpdate = {},
+    )
+
+    private fun show(state: TelemetryUiState) {
+        compose.setContent { TelemetryScreen(state, UpdateState.None, true, settings, actions) }
+        compose.waitForIdle()
+    }
+
+    private fun save(name: String) {
+        compose.waitForIdle()
+        val root = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        root.draw(Canvas(bitmap))
+        val dir = File("build/screens").apply { mkdirs() }
+        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    fun portraitDashboard() {
+        show(state())
+        save("portrait-en")
+    }
+
+    @Test
+    @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
+    fun landscapeDashboard() {
+        show(state())
+        save("landscape-en")
+    }
+
+    @Test
+    @Config(qualifiers = "ar-w393dp-h851dp-port-xxhdpi")
+    fun arabicDashboard() {
+        show(state())
+        save("portrait-ar")
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h568dp-port-xhdpi")
+    fun smallPhone() {
+        show(state())
+        save("portrait-small")
+    }
+
+    @Test
+    fun calibrating() {
+        show(state(snapshot = driving.copy(calibration = CalibrationState.LEARNING_FORWARD, longitudinalG = null, lateralG = null)))
+        save("calibrating")
+    }
+
+    @Test
+    fun everyThemeDraws() {
+        var current by mutableStateOf(state())
+        compose.setContent { TelemetryScreen(current, UpdateState.None, true, settings, actions) }
+        ThemePreset.entries.forEach { preset ->
+            current = state(theme = preset.theme)
+            save("theme-${preset.name.lowercase()}")
+        }
+    }
+
+    @Test
+    fun settingsSheetWithThemeEditor() {
+        show(state())
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.waitForIdle()
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Edit colours"))
+        compose.onNodeWithText("Edit colours").performClick()
+        compose.waitForIdle()
+        save("settings-theme")
+    }
+
+    @Test
+    fun themeEditor() {
+        var theme by mutableStateOf(ThemePreset.BLUE.theme)
+        compose.setContent {
+            DashTheme(theme) {
+                Column(
+                    Modifier.fillMaxSize().background(Panel).verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    ThemeSettings(theme) { changed, _ -> theme = changed }
+                }
+            }
+        }
+        compose.onNodeWithText("Edit colours").performClick()
+        save("theme-editor")
+        compose.onNodeWithText("White").performClick()
+        save("theme-editor-white")
+        assertEquals(ThemePreset.WHITE.theme, theme)
+    }
+
+    @Test
+    fun badNumbersDoNotCrash() {
+        show(state(snapshot = driving.copy(speedMps = Double.NaN, totalG = Double.POSITIVE_INFINITY)))
+    }
+
+    private companion object {
+        val driving = TelemetrySnapshot(
+            speedMps = 27.0,
+            speedSource = SpeedSource.LIVE,
+            speedSigmaMps = 0.2,
+            calibration = CalibrationState.READY,
+            learningProgress = 1.0,
+            longitudinalG = 0.22,
+            lateralG = 0.31,
+            totalG = 0.38,
+            peaks = Peaks(accel = 0.31, brake = 0.48, left = 0.39, right = 0.65),
+        )
+    }
+}

@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.os.Build
 import android.os.SystemClock
@@ -86,7 +87,7 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
     @Volatile private var failed = false
     @Volatile private var closed = false
     @Volatile private var writer: BluetoothGattCharacteristic? = null
-    private var gatt: BluetoothGatt? = null
+    @Volatile private var gatt: BluetoothGatt? = null
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
@@ -98,6 +99,7 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS) return fail()
             val (write, notify) = findSerialCharacteristics(g) ?: return fail()
             writer = write
             g.setCharacteristicNotification(notify, true)
@@ -139,6 +141,7 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
 
     fun open() {
         gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+            ?: throw IOException("Bluetooth is off")
         val finished = ready.await(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         if (!finished || failed) throw IOException("Could not set up the Bluetooth LE adapter")
     }
@@ -157,8 +160,17 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
         } else {
             BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
         }
-        val sent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(characteristic, bytes, type) == BluetoothGatt.GATT_SUCCESS
+        // The radio is briefly busy after any write, which isn't a failure.
+        repeat(WRITE_ATTEMPTS) {
+            if (write(g, characteristic, bytes, type)) return
+            Thread.sleep(WRITE_RETRY_MS)
+        }
+        throw IOException("Adapter refused the command")
+    }
+
+    private fun write(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, bytes: ByteArray, type: Int): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeCharacteristic(characteristic, bytes, type) == BluetoothStatusCodes.SUCCESS
         } else {
             characteristic.writeType = type
             @Suppress("DEPRECATION")
@@ -166,8 +178,6 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
             @Suppress("DEPRECATION")
             g.writeCharacteristic(characteristic)
         }
-        if (!sent) throw IOException("Adapter refused the command")
-    }
 
     override fun readResponse(): String? {
         val text = StringBuilder()
@@ -183,6 +193,8 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
         return null
     }
 
+    /** Called from both the connection's thread and whichever thread stops it. */
+    @Synchronized
     override fun close() {
         closed = true
         gatt?.disconnect()
@@ -209,7 +221,10 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
     }
 
     private companion object {
-        const val CONNECT_TIMEOUT_SECONDS = 15L
+        /** Android's own limit for a direct connection, so a slow adapter isn't cut off early. */
+        const val CONNECT_TIMEOUT_SECONDS = 30L
+        const val WRITE_ATTEMPTS = 5
+        const val WRITE_RETRY_MS = 20L
         val CLIENT_CONFIG: UUID = bluetoothUuid("2902")
         val COMMON_SERIAL_SERVICES = listOf(
             bluetoothUuid("FFE0"),

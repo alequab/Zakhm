@@ -57,6 +57,27 @@
     <string name="section_screen">الشاشة</string>
     <string name="section_language">اللغة</string>
     <string name="section_tools">الأدوات</string>
+    <string name="section_theme">المظهر</string>
+
+    <string name="theme_hint">اجعل لوحة القيادة تناسب سيارتك. تحتفظ كل سيارة بمظهرها، ويتغيّر مع تغيّر السيارة.</string>
+    <string name="theme_amber">كهرماني</string>
+    <string name="theme_red">أحمر</string>
+    <string name="theme_orange">برتقالي</string>
+    <string name="theme_yellow">أصفر</string>
+    <string name="theme_green">أخضر</string>
+    <string name="theme_blue">أزرق</string>
+    <string name="theme_silver">فضي</string>
+    <string name="theme_white">أبيض</string>
+    <string name="theme_customize">تعديل الألوان</string>
+    <string name="theme_done">تم</string>
+    <string name="theme_reset">استعادة الألوان</string>
+    <string name="theme_part_accent">اللون المميز</string>
+    <string name="theme_part_background">الخلفية</string>
+    <string name="theme_part_panel">اللوحات</string>
+    <string name="theme_hue">اللون</string>
+    <string name="theme_saturation">القوة</string>
+    <string name="theme_brightness">السطوع</string>
+    <string name="theme_readable_hint">تُعدَّل الألوان المتقاربة صعبة القراءة تلقائيًا لتبقى الأرقام واضحة.</string>
 
     <string name="car_default_name">سيارتي</string>
     <string name="car_vin_name">سيارة %1$s</string>
@@ -100,7 +121,7 @@
     <string name="obd_none_found">لم يُعثر على محوّلات.</string>
     <string name="obd_scan">البحث عن محوّلات Bluetooth LE</string>
     <string name="obd_scanning">جارٍ البحث…</string>
-
+    <string name="obd_saved_adapter">المحوّل المحفوظ</string>
     <string name="rotation_auto">تلقائي</string>
     <string name="rotation_portrait">رأسي</string>
     <string name="rotation_landscape">أفقي</string>

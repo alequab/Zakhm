@@ -69,6 +69,10 @@
 <td valign="top"><b>تسجيل الرحلة</b><br>يحفظ قراءات الحساسات في ملف يمكنك مشاركته، بدون أي بيانات موقع.</td>
 <td valign="top"><b>تحديث من داخل التطبيق</b><br>إشعار عند صدور إصدار جديد، وتنزيل موثَّق بضغطة، ويبقى التثبيت بموافقتك.</td>
 </tr>
+<tr>
+<td valign="top"><b>مظهر لكل سيارة</b><br>ثمانية ألوان جاهزة أو ألوانك الخاصة، ويتغيّر المظهر مع تغيّر السيارة وتبقى الأرقام واضحة.</td>
+<td valign="top"><b>ملاحظة تحريك الهاتف</b><br>إذا تحرّك الهاتف أثناء القيادة، يلاحظ التطبيق ذلك ويعيد المعايرة بدل عرض قراءات خاطئة.</td>
+</tr>
 </table>
 
 ### البدء السريع
@@ -85,7 +89,9 @@
 2. انتظر في الخارج حتى تختفي رسالة GPS.
 3. قُد بشكل طبيعي، فتختفي رسالة المعايرة بعد تغييرات قليلة في السرعة أو بعض المنعطفات.
 
-إذا حرّكت الهاتف داخل الحامل، فاضغط أيقونة الإعدادات ثم **معايرة**.
+إذا حرّكت الهاتف داخل الحامل، فسيعيد التطبيق المعايرة غالبًا من تلقاء نفسه. ويمكنك أيضًا الضغط على أيقونة الإعدادات ثم **معايرة**.
+
+لتغيير الألوان، افتح الإعدادات ثم **المظهر**.
 
 ### كيف يعمل
 
@@ -110,8 +116,9 @@ flowchart LR
 
 ### ما يجب معرفته
 
-- جرى تشغيل التطبيق على هاتف بنظام أندرويد 13، واجتازت حساباته الاختبارات على رحلات محاكاة. لكنه لم يُختبر بعد في قيادة حقيقية، لذا لم تُقَس دقته على الطريق حتى الآن.
-- اتصل التطبيق بمحوّل OBD-II حقيقي يعمل بتقنية Bluetooth LE والسيارة متوقفة، لكن لم تُختبر قراءة السرعة أثناء الحركة ولا قراءة رقم الهيكل من سيارة حقيقية. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
+- جرى تشغيل التطبيق على هاتف بنظام أندرويد 13 وفي رحلة قصيرة حقيقية، واجتازت حساباته الاختبارات على رحلات محاكاة. لكن لم تُقَس دقته على الطريق حتى الآن.
+- في تلك الرحلة، قرأ التطبيق السرعة ورقم الهيكل من سيارة حقيقية عبر محوّل OBD-II يعمل بتقنية Bluetooth LE. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
+- لم تُختبر ملاحظة تحريك الهاتف إلا على رحلات محاكاة حتى الآن.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
 
 <details>
@@ -152,6 +159,7 @@ flowchart LR
 | `core/SpeedFilter.kt` | مرشح كالمان للسرعة |
 | `core/ForwardLearner.kt` | تحديد اتجاه الأمام |
 | `core/CarProfiles.kt` | السيارات المحفوظة والتعرف عليها |
+| `core/CarTheme.kt` | ألوان المظهر والحفاظ على وضوحها |
 | `core/Obd.kt` | بروتوكول OBD-II ورقم الهيكل |
 | `ObdLinks.kt` | الاتصال بالمحوّل بالبلوتوث الكلاسيكي وBluetooth LE |
 | `car/SpeedCarAppService.kt` | شاشة Android Auto |
@@ -206,6 +214,10 @@ flowchart LR
 <td valign="top"><b>Drive recording</b><br>Saves sensor readings to a file you can share, with no location data.</td>
 <td valign="top"><b>In-app updates</b><br>A notification when a new version is out, a verified one-tap download, and you approve the install.</td>
 </tr>
+<tr>
+<td valign="top"><b>A theme for each car</b><br>Eight ready-made colours or your own. The theme switches with the car, and the numbers stay clear.</td>
+<td valign="top"><b>Notices a moved phone</b><br>If the phone moves during a drive, the app notices and calibrates again instead of showing wrong readings.</td>
+</tr>
 </table>
 
 ### Quick start
@@ -222,7 +234,9 @@ flowchart LR
 2. Wait outside until the GPS message clears.
 3. Drive normally. The calibration message clears after a few speed changes or turns.
 
-If you move the phone in its mount, tap the settings icon, then **Calibrate**.
+If you move the phone in its mount, the app will usually calibrate again by itself. You can also tap the settings icon, then **Calibrate**.
+
+To change the colours, open settings, then **Theme**.
 
 ### How it works
 
@@ -243,8 +257,9 @@ flowchart LR
 
 ### Good to know
 
-- The app has run on an Android 13 phone, and its calculations pass tests on simulated drives. It hasn't been checked on a real drive yet, so its road accuracy is still unmeasured.
-- The app has connected to a real Bluetooth LE OBD-II adapter with the car parked, but reading speed while moving and reading a VIN from a real car haven't been tested. Classic adapters and Android Auto haven't been tried with a real device or car.
+- The app has run on an Android 13 phone and on one short real drive, and its calculations pass tests on simulated drives. Its road accuracy is still unmeasured.
+- On that drive, the app read speed and the VIN from a real car through a Bluetooth LE OBD-II adapter. Classic adapters and Android Auto haven't been tried with a real device or car.
+- Noticing a moved phone has only been tested on simulated drives so far.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
 
 <details>
@@ -281,6 +296,7 @@ The APK is written to `app/build/outputs/apk/debug/`. Builds from source don't i
 | `core/SpeedFilter.kt` | Kalman filter for speed |
 | `core/ForwardLearner.kt` | Works out which way is forward |
 | `core/CarProfiles.kt` | Saved cars and recognizing them |
+| `core/CarTheme.kt` | Theme colours and keeping them readable |
 | `core/Obd.kt` | OBD-II protocol and VIN reading |
 | `ObdLinks.kt` | Classic Bluetooth and Bluetooth LE adapter connections |
 | `car/SpeedCarAppService.kt` | Android Auto screen |

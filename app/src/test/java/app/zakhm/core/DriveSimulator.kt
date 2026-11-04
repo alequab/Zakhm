@@ -39,14 +39,17 @@ class DriveSimulator(
     private val idleVibration: Double = 0.0,
     /** Strength of someone slowly moving the phone around by hand, in m/s^2. */
     private val handling: Double = 0.0,
+    /** Strength of a loose mount shaking at 8 Hz, in m/s^2. */
+    private val mountShake: Double = 0.0,
     startSpeed: Double = 0.0,
     seed: Long = 42,
+    startTime: Double = 100.0,
 ) {
     private val random = Random(seed)
     private val imuRate = 200
     private val dt = 1.0 / imuRate
 
-    var time = 100.0
+    var time = startTime
         private set
     var speed = startSpeed
         private set
@@ -92,7 +95,8 @@ class DriveSimulator(
         val vibration = if (moving) accelNoise else accelNoise / 2
         val shake = sin(2 * Math.PI * 25.0 * time)
         val sway = sin(2 * Math.PI * 0.7 * time)
-        val shakeForce = Vec3(idleVibration * shake + handling * sway, idleVibration * shake * 0.5, idleVibration * shake)
+        val wobble = mountShake * sin(2 * Math.PI * 8.0 * time)
+        val shakeForce = Vec3(idleVibration * shake + handling * sway + wobble, idleVibration * shake * 0.5 + wobble, idleVibration * shake)
         val shakeGyro = Vec3(0.06 * shake * idleVibration + 0.4 * sway * handling, 0.0, 0.03 * shake * idleVibration)
         engine.onGyro(time, toPhone(gyroCar + shakeGyro) + gyroBias + noise(gyroNoise))
         engine.onAccel(time, toPhone(forceCar + shakeForce) + accelBias + noise(vibration))

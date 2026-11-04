@@ -19,6 +19,7 @@ import app.zakhm.car.AndroidAutoSpeed
 import app.zakhm.core.CarIdentity
 import app.zakhm.core.CarProfile
 import app.zakhm.core.CarRegistry
+import app.zakhm.core.CarTheme
 import app.zakhm.core.DriveLog
 import app.zakhm.core.SpeedFix
 import app.zakhm.core.SpeedInput
@@ -94,6 +95,7 @@ class TelemetryController(private val context: Context) {
     private var obdAddress: String? = null
     private var obdConnection: ObdConnection? = null
     private var obdState = ObdState.IDLE
+    private var obdSession = 0
 
     private var recorder: BufferedWriter? = null
     private var recordingFile: File? = null
@@ -108,11 +110,12 @@ class TelemetryController(private val context: Context) {
             when (event.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
                     engine.onAccel(event.timestamp / 1e9, Vec3(v[0].toDouble(), v[1].toDouble(), v[2].toDouble()))
-                    record(DriveLog.accel(event.timestamp, v[0], v[1], v[2]))
+                    // Hundreds of readings a second, so only build the text when it's wanted.
+                    if (recorder != null) record(DriveLog.accel(event.timestamp, v[0], v[1], v[2]))
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     engine.onGyro(event.timestamp / 1e9, Vec3(v[0].toDouble(), v[1].toDouble(), v[2].toDouble()))
-                    record(DriveLog.gyro(event.timestamp, v[0], v[1], v[2]))
+                    if (recorder != null) record(DriveLog.gyro(event.timestamp, v[0], v[1], v[2]))
                 }
             }
         }
@@ -174,21 +177,26 @@ class TelemetryController(private val context: Context) {
         if (running) return@post
         running = true
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
-            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_FASTEST, handler)
+            sensorManager.registerListener(sensorListener, it, SENSOR_PERIOD_US, handler)
         }
         sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let {
-            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_FASTEST, handler)
+            sensorManager.registerListener(sensorListener, it, SENSOR_PERIOD_US, handler)
         }
         // The GPS provider directly: the fused provider smooths and delays speed.
         gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        locationManager.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER,
-            0L,
-            0f,
-            locationListener,
-            thread.looper,
-        )
-        locationManager.registerGnssStatusCallback(gnssCallback, handler)
+        try {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                0L,
+                0f,
+                locationListener,
+                thread.looper,
+            )
+            locationManager.registerGnssStatusCallback(gnssCallback, handler)
+        } catch (_: IllegalArgumentException) {
+            // A device with no GPS. A car source can still give speed.
+            gpsEnabled = false
+        }
         AndroidAutoSpeed.listener = { speed -> handler.post { onAndroidAutoSpeed(speed) } }
         AndroidAutoSpeed.identityListener = { car -> handler.post { onCarIdentified(car, viaObd = false) } }
         AndroidAutoSpeed.identity?.let { onCarIdentified(it, viaObd = false) }
@@ -206,6 +214,7 @@ class TelemetryController(private val context: Context) {
         AndroidAutoSpeed.identityListener = null
         stopObd()
         handler.removeCallbacks(publisher)
+        satellitesUsed = null
         stopRecordingNow()
         saveCars()
         publish()
@@ -257,6 +266,13 @@ class TelemetryController(private val context: Context) {
         captureActiveCar()
         if (cars.delete(id)) applyActiveCar()
         saveCars()
+        publish()
+    }
+
+    /** Changes the active car's colours. Sliders call this constantly, so only final changes are written to storage. */
+    fun setTheme(theme: CarTheme, final: Boolean) = handler.post {
+        cars.updateActive { it.copy(theme = theme) }
+        if (final) saveCars()
         publish()
     }
 
@@ -373,20 +389,24 @@ class TelemetryController(private val context: Context) {
         val address = obdAddress
         val adapter = bluetoothManager?.adapter
         if (router.selected != SpeedInput.OBD || address == null || adapter == null) return
+        // A stopped connection's last messages can still be on their way, and must not act on the new choice.
+        val session = ++obdSession
+        fun current(action: () -> Unit) = handler.post { if (session == obdSession) action() }
         obdConnection = ObdConnection(
             context = context,
             adapter = adapter,
             address = address,
-            onState = { state -> handler.post { obdState = state } },
-            onSpeed = { kmh, nanos -> handler.post { onObdSpeed(kmh, nanos) } },
+            onState = { state -> current { obdState = state } },
+            onSpeed = { kmh, nanos -> current { onObdSpeed(kmh, nanos) } },
             onVin = { vin ->
                 val name = context.getString(R.string.car_vin_name, vin.takeLast(CarIdentity.VIN_NAME_LENGTH))
-                handler.post { onCarIdentified(CarIdentity.fromVin(vin, name), viaObd = true) }
+                current { onCarIdentified(CarIdentity.fromVin(vin, name), viaObd = true) }
             },
         ).also { it.start() }
     }
 
     private fun stopObd() {
+        obdSession++
         obdConnection?.stop()
         obdConnection = null
         obdState = ObdState.IDLE
@@ -430,6 +450,7 @@ class TelemetryController(private val context: Context) {
         recordingError = null
         try {
             val dir = context.getExternalFilesDir("recordings") ?: throw IOException()
+            removeOldRecordings(dir)
             val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
             val file = File(dir, "drive-$stamp.csv.gz")
             val out = GZIPOutputStream(FileOutputStream(file), 64 * 1024, true).bufferedWriter()
@@ -442,6 +463,14 @@ class TelemetryController(private val context: Context) {
         } catch (_: IOException) {
             recordingError = context.getString(R.string.recording_error_start)
         }
+    }
+
+    /** Raw sensor recordings are large, so only the newest are kept. */
+    private fun removeOldRecordings(dir: File) {
+        dir.listFiles().orEmpty()
+            .sortedByDescending { it.lastModified() }
+            .drop(MAX_RECORDINGS - 1)
+            .forEach { it.delete() }
     }
 
     private fun stopRecordingNow() {
@@ -475,6 +504,10 @@ class TelemetryController(private val context: Context) {
 
     private companion object {
         const val PUBLISH_INTERVAL_MS = 50L
+
+        /** 200 readings a second is far more than a car's motion needs, and half the work of the fastest rate. */
+        const val SENSOR_PERIOD_US = 5000
+        const val MAX_RECORDINGS = 20
         const val RECORDER_FLUSH_INTERVAL_MS = 5000L
         const val CAR_NOTICE_MS = 6000L
 

@@ -19,8 +19,8 @@ android {
         applicationId = "app.zakhm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.4.2"
+        versionCode = 12
+        versionName = "1.5.0"
 
         val updateUrl = providers.gradleProperty("zakhmUpdateUrl").getOrElse("")
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
@@ -54,6 +54,7 @@ android {
     }
 
     testOptions {
+        unitTests.isIncludeAndroidResources = true
         unitTests.all { test ->
             test.systemProperty("replayFile", providers.gradleProperty("replayFile").getOrElse(""))
         }
@@ -73,4 +74,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    testImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.16")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

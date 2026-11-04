@@ -96,6 +96,18 @@ class SpeedFilter {
         return true
     }
 
+    /** Starts again from a trusted [measured] speed, dropping anything learned from a bad acceleration signal. */
+    fun restartFrom(measured: Double, measurementSigma: Double) {
+        if (initialized) cumulativeCorrection += measured - speed
+        speed = measured
+        bias = 0.0
+        pvv = measurementSigma * measurementSigma
+        pvb = 0.0
+        pbb = INITIAL_BIAS_VARIANCE
+        rejectedInARow = 0
+        initialized = true
+    }
+
     /** The car is known to be stopped. */
     fun updateStopped() {
         if (!initialized) return

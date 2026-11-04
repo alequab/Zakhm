@@ -4,19 +4,23 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
 import android.app.LocaleManager
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.LocaleList
 import android.os.Looper
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -48,6 +53,16 @@ class TelemetryViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         checkForUpdate()
+        // The user can say no on Android's screen, which mustn't leave the banner stuck on "installing".
+        viewModelScope.launch {
+            InstallEvents.ended.collect { cancelled ->
+                val current = _update.value
+                if (current is UpdateState.Installing) {
+                    val found = current.update ?: return@collect
+                    _update.value = if (cancelled) UpdateState.Available(found) else UpdateState.Failed(found)
+                }
+            }
+        }
     }
 
     /** Looks for a new release, unless one is already being handled. */
@@ -83,6 +98,9 @@ class TelemetryViewModel(application: Application) : AndroidViewModel(applicatio
                 Updater.install(context, apk)
             } catch (_: IOException) {
                 _update.value = UpdateState.Failed(found)
+            } catch (_: RuntimeException) {
+                // Android's installer can refuse a session this way.
+                _update.value = UpdateState.Failed(found)
             }
         }
     }
@@ -104,6 +122,7 @@ class MainActivity : ComponentActivity() {
     private var scannedDevices by mutableStateOf(emptyList<ObdDevice>())
     private var scanning by mutableStateOf(false)
     private var needsBluetoothPermission by mutableStateOf(false)
+    private var chosenLanguage by mutableStateOf<AppLanguage?>(null)
 
     private val preferences by lazy { getSharedPreferences("settings", Context.MODE_PRIVATE) }
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -138,51 +157,59 @@ class MainActivity : ComponentActivity() {
             ?: RotationMode.AUTO
         applyRotation()
 
+        // Reading this asks a system service, so it can't be done on every frame.
+        chosenLanguage = currentLanguage()
+
         hasPermission = checkPermission()
         if (!hasPermission) requestPermission() else askForNotificationsOnce()
         Updater.schedule(this)
 
         val controller = viewModel.controller
+        val actions = screenActions()
         setContent {
             val state by controller.state.collectAsStateWithLifecycle()
             val update by viewModel.update.collectAsStateWithLifecycle()
-            TelemetryScreen(
-                state = state,
-                update = update,
-                hasPermission = hasPermission,
-                settings = ScreenSettings(
+            // The dashboard redraws many times a second, and none of this changes with it.
+            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage) {
+                ScreenSettings(
                     useMph = useMph,
                     rotation = rotation,
                     obdDevices = (pairedDevices + scannedDevices).distinctBy { it.address },
                     scanningForAdapters = scanning,
                     needsBluetoothPermission = needsBluetoothPermission,
-                    language = currentLanguage(),
-                ),
-                actions = ScreenActions(
-                    requestPermission = ::requestPermission,
-                    calibrate = controller::calibrate,
-                    resetPeaks = controller::resetPeaks,
-                    setUseMph = ::setUnits,
-                    setRotation = ::setRotationMode,
-                    setLanguage = ::setLanguage,
-                    selectInput = ::selectInput,
-                    selectObdDevice = controller::selectObdDevice,
-                    requestBluetooth = ::requestBluetooth,
-                    scanForAdapters = ::scanForAdapters,
-                    selectCar = controller::selectCar,
-                    addCar = controller::addCar,
-                    renameCar = controller::renameCar,
-                    deleteCar = controller::deleteCar,
-                    saveUnknownCarToCurrent = controller::saveUnknownCarToCurrent,
-                    saveUnknownCarAsNew = controller::saveUnknownCarAsNew,
-                    skipUnknownCar = controller::skipUnknownCar,
-                    toggleRecording = controller::toggleRecording,
-                    shareRecording = ::shareRecording,
-                    startUpdate = viewModel::startUpdate,
-                    dismissUpdate = viewModel::dismissUpdate,
-                ),
-            )
+                    language = chosenLanguage,
+                )
+            }
+            TelemetryScreen(state, update, hasPermission, settings, actions)
         }
+    }
+
+    private fun screenActions(): ScreenActions {
+        val controller = viewModel.controller
+        return ScreenActions(
+            requestPermission = ::requestPermission,
+            calibrate = { controller.calibrate() },
+            resetPeaks = { controller.resetPeaks() },
+            setUseMph = ::setUnits,
+            setRotation = ::setRotationMode,
+            setLanguage = ::setLanguage,
+            setTheme = { theme, final -> controller.setTheme(theme, final) },
+            selectInput = ::selectInput,
+            selectObdDevice = { controller.selectObdDevice(it) },
+            requestBluetooth = ::requestBluetooth,
+            scanForAdapters = ::scanForAdapters,
+            selectCar = { controller.selectCar(it) },
+            addCar = { controller.addCar(it) },
+            renameCar = { id, name -> controller.renameCar(id, name) },
+            deleteCar = { controller.deleteCar(it) },
+            saveUnknownCarToCurrent = { controller.saveUnknownCarToCurrent() },
+            saveUnknownCarAsNew = { controller.saveUnknownCarAsNew() },
+            skipUnknownCar = { controller.skipUnknownCar() },
+            toggleRecording = { controller.toggleRecording() },
+            shareRecording = ::shareRecording,
+            startUpdate = viewModel::startUpdate,
+            dismissUpdate = viewModel::dismissUpdate,
+        )
     }
 
     /** Tapping the update notification while the app is already open arrives here. */
@@ -209,6 +236,17 @@ class MainActivity : ComponentActivity() {
             PackageManager.PERMISSION_GRANTED
 
     private fun requestPermission() {
+        // After being refused twice, Android silently ignores the request, so the button must go to settings instead.
+        val alreadyAsked = preferences.getBoolean(KEY_ASKED_LOCATION, false)
+        if (alreadyAsked && !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            try {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+                return
+            } catch (_: ActivityNotFoundException) {
+                // Fall through and ask anyway.
+            }
+        }
+        preferences.edit().putBoolean(KEY_ASKED_LOCATION, true).apply()
         val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissions += Manifest.permission.POST_NOTIFICATIONS
         permissionRequest.launch(permissions.toTypedArray())
@@ -248,10 +286,23 @@ class MainActivity : ComponentActivity() {
     private fun scanForAdapters() {
         if (scanning) return
         if (!hasBluetoothPermission()) return requestBluetooth()
-        val scanner = getSystemService(BluetoothManager::class.java)?.adapter?.bluetoothLeScanner ?: return
+        val adapter = getSystemService(BluetoothManager::class.java)?.adapter ?: return
+        if (!adapter.isEnabled) {
+            try {
+                startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            } catch (_: ActivityNotFoundException) {
+                // Nothing on this phone can turn it on from here.
+            }
+            return
+        }
+        val scanner = adapter.bluetoothLeScanner ?: return
         scannedDevices = emptyList()
+        try {
+            scanner.startScan(scanCallback)
+        } catch (_: IllegalStateException) {
+            return // Bluetooth was turned off in that moment.
+        }
         scanning = true
-        scanner.startScan(scanCallback)
         mainHandler.postDelayed(::stopScan, SCAN_DURATION_MS)
     }
 
@@ -260,7 +311,11 @@ class MainActivity : ComponentActivity() {
         if (!scanning) return
         scanning = false
         mainHandler.removeCallbacksAndMessages(null)
-        getSystemService(BluetoothManager::class.java)?.adapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        try {
+            getSystemService(BluetoothManager::class.java)?.adapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        } catch (_: IllegalStateException) {
+            // Bluetooth is off, which ended the scan already.
+        }
     }
 
     private fun selectInput(input: SpeedInput) {
@@ -297,9 +352,10 @@ class MainActivity : ComponentActivity() {
         return AppLanguage.entries.firstOrNull { it.tag.isNotEmpty() && tags.startsWith(it.tag) } ?: AppLanguage.PHONE
     }
 
-    private fun setLanguage(language: AppLanguage) {
+    private fun setLanguage(choice: AppLanguage) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(language.tag)
+        chosenLanguage = choice
+        getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(choice.tag)
     }
 
     private fun shareRecording(file: File) {
@@ -315,6 +371,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_MPH = "use_mph"
         const val KEY_ROTATION = "rotation"
         const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
+        const val KEY_ASKED_LOCATION = "asked_location"
         const val SCAN_DURATION_MS = 10_000L
         val BLUETOOTH_PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
     }
