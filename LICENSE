@@ -1,0 +1,46 @@
+SpeedG Individual Use License
+
+Copyright (c) 2026 Abdullah Zaid (عبدالله زيد), GitHub: alequab.
+All rights reserved except as stated below.
+
+1. Definitions.
+   "Individual" means a natural person using the Software for their own personal
+   purposes, including hobby projects and personal study.
+   "Organization" means any company, business, institution, school, government
+   body, charity, association, or other legal entity or group. A person running
+   a business, including a sole trader or freelancer, is treated as an
+   Organization when using the Software for that business.
+
+2. Individuals. An Individual may use, copy, and modify the Software, and share
+   it or modified versions with other Individuals, as long as:
+   (a) this license and the copyright notice stay with every copy; and
+   (b) any changes are clearly marked.
+
+3. Organizations. An Organization may not use, copy, modify, or distribute the
+   Software, in whole or in part. The same applies to any person acting for or on
+   behalf of an Organization, including an employee or contractor doing their
+   work. This restriction can only be lifted by written permission from the
+   copyright holder.
+
+4. No sale. The Software and modified versions may not be sold or offered as part
+   of a paid product or service.
+
+5. GitHub. The Software is published in a public GitHub repository. Nothing here
+   limits the rights to view and fork that repository on GitHub which GitHub's
+   Terms of Service give its users. Those rights do not extend to any use beyond
+   GitHub, which remains governed by this license.
+
+6. Third-party components. The Software includes components owned by others,
+   listed in THIRD_PARTY_NOTICES.md. They remain under their own licenses, and
+   nothing here restricts any right those licenses give you.
+
+7. Termination. Your rights under this license end automatically if you break its
+   terms.
+
+8. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING ACCURACY OF ANY SPEED OR G-FORCE READING. THE
+   COPYRIGHT HOLDER IS NOT LIABLE FOR ANY CLAIM, DAMAGE, OR OTHER LIABILITY
+   ARISING FROM THE SOFTWARE OR ITS USE.
+
+9. Language. If a translation or summary of this license differs from this English
+   text, this English text applies.

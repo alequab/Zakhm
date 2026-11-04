@@ -1,0 +1,9 @@
+Third-party notices
+
+SpeedG's own license does not apply to these components. Each remains under its
+own license, and copyright stays with its owners. The full license text is in
+Apache-2.0.txt, next to this file.
+
+- AndroidX and Jetpack Compose (androidx.*): The Android Open Source Project, Apache 2.0
+- Kotlin and kotlinx.coroutines (org.jetbrains.*): JetBrains and contributors, Apache 2.0
+- Guava (com.google.guava): The Guava Authors, Apache 2.0
