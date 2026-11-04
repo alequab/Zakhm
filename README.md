@@ -14,7 +14,7 @@
 
 ## العربية
 
-**زخم** تطبيق أندرويد يعرض سرعة سيارتك وقوة التسارع (G) باستخدام حساسات هاتفك، مع إمكانية قراءة السرعة من OBD-II أو Android Auto. لا يحتاج إلى حساب ولا يعرض إعلانات ولا يتطلب أجهزة إضافية. ويتوفر التطبيق بالعربية والإنجليزية، ويُعرف أيضًا باسم SpeedG.
+**زخم** تطبيق أندرويد يعرض سرعة سيارتك وقوة التسارع (G) باستخدام حساسات هاتفك، مع إمكانية قراءة السرعة من OBD-II أو Android Auto. لا يحتاج إلى حساب ولا يعرض إعلانات ولا يتطلب أجهزة إضافية. ويتوفر التطبيق بالعربية والإنجليزية، واسمه بالإنجليزية Zakhm، ويُعرف أيضًا باسم SpeedG.
 
 </div>
 
@@ -115,18 +115,18 @@
 
 ## English
 
-**زخم** (Zakhm, meaning "momentum"), also known as SpeedG, is an Android app that shows your car's speed and G-force using your phone's sensors, with optional speed from OBD-II or Android Auto. No account, no ads and no extra hardware required. The app is available in Arabic and English.
+**Zakhm** (زخم, meaning "momentum"), also known as SpeedG, is an Android app that shows your car's speed and G-force using your phone's sensors, with optional speed from OBD-II or Android Auto. No account, no ads and no extra hardware required. The app is available in Arabic and English.
 
 <p align="center">
-  <img src="docs/images/portrait.png" alt="SpeedG in portrait, waiting for a GPS signal" height="520">
+  <img src="docs/images/portrait.png" alt="Zakhm in portrait, waiting for a GPS signal" height="520">
 </p>
 <p align="center">
-  <img src="docs/images/landscape.png" alt="SpeedG in landscape" width="720">
+  <img src="docs/images/landscape.png" alt="Zakhm in landscape" width="720">
 </p>
 
 *Screenshots were taken indoors while parked, so the app is still waiting for a GPS signal and no speed is shown.*
 
-> **Project status:** SpeedG has run on an Android 13 phone, and its calculations pass tests on simulated drives. It has not been checked on a real drive yet, so its road accuracy is still unmeasured. OBD-II and Android Auto have not been tested with a real car or adapter.
+> **Project status:** Zakhm has run on an Android 13 phone, and its calculations pass tests on simulated drives. It has not been checked on a real drive yet, so its road accuracy is still unmeasured. OBD-II and Android Auto have not been tested with a real car or adapter.
 
 ### Features
 
@@ -150,7 +150,7 @@
 2. Open the file on your phone and allow installs from that source if Android asks.
 3. Allow precise location when the app asks.
 
-SpeedG needs Android 8.0 or newer and a phone with GPS and an accelerometer. A gyroscope is recommended.
+Zakhm needs Android 8.0 or newer and a phone with GPS and an accelerometer. A gyroscope is recommended.
 
 ### First use
 
@@ -200,6 +200,6 @@ The APK is written to `app/build/outputs/apk/debug/`. Builds from source don't i
 
 ### License
 
-SpeedG is free for **individuals** to use, modify and share for personal purposes. **Companies and organizations may not use it** without written permission, including freelancers and one-person businesses using it for their work. It may not be sold. See [LICENSE](LICENSE) for the full terms.
+Zakhm is free for **individuals** to use, modify and share for personal purposes. **Companies and organizations may not use it** without written permission, including freelancers and one-person businesses using it for their work. It may not be sold. See [LICENSE](LICENSE) for the full terms.
 
-Because of these limits, SpeedG is source-available rather than open source. The third-party components it includes keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Because of these limits, Zakhm is source-available rather than open source. The third-party components it includes keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
