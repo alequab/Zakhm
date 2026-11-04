@@ -144,12 +144,12 @@ class TelemetryEngineTest {
         sim.gpsEnabled = false
         sim.run(16.0)
         val s = engine.snapshot()
-        assertEquals(SpeedSource.NO_GPS, s.speedSource)
+        assertEquals(SpeedSource.NO_SIGNAL, s.speedSource)
         assertNull(s.speedMps)
     }
 
     @Test
-    fun noNumberBeforeTheFirstGpsFix() {
+    fun noNumberBeforeTheFirstSpeedFix() {
         sim.gpsEnabled = false
         sim.run(5.0)
         val s = engine.snapshot()
@@ -161,7 +161,7 @@ class TelemetryEngineTest {
     fun wildGpsSpikeIsIgnored() {
         calibrate()
         val speedBefore = engine.snapshot().speedMps!!
-        engine.onGps(GpsFix(sim.time, speedBefore + 40.0, 0.3, 4.0))
+        engine.onSpeedFix(SpeedFix(sim.time, speedBefore + 40.0, 0.3, 4.0))
         assertEquals(speedBefore, engine.snapshot().speedMps!!, 0.5)
     }
 
@@ -171,7 +171,7 @@ class TelemetryEngineTest {
         sim.gpsEnabled = false
         sim.run(4.0)
         assertEquals(SpeedSource.ESTIMATED, engine.snapshot().speedSource)
-        engine.onGps(GpsFix(sim.time, sim.speed + 40.0, 0.3, 4.0))
+        engine.onSpeedFix(SpeedFix(sim.time, sim.speed + 40.0, 0.3, 4.0))
         assertEquals(SpeedSource.ESTIMATED, engine.snapshot().speedSource)
     }
 
@@ -179,18 +179,18 @@ class TelemetryEngineTest {
     fun fixStampedOnADifferentClockStillWorks() {
         sim.gpsEnabled = false
         sim.run(3.0)
-        engine.onGps(GpsFix(sim.time + 5000.0, 10.0, 0.3, 4.0))
+        engine.onSpeedFix(SpeedFix(sim.time + 5000.0, 10.0, 0.3, 4.0))
         sim.run(0.3)
         val s = engine.snapshot()
-        assertEquals(SpeedSource.GPS, s.speedSource)
+        assertEquals(SpeedSource.LIVE, s.speedSource)
         assertEquals(10.0, s.speedMps!!, 0.01)
     }
 
     @Test
-    fun unreliableGpsFixIsNotUsed() {
+    fun unreliableSpeedFixIsNotUsed() {
         sim.gpsEnabled = false
         sim.run(3.0)
-        engine.onGps(GpsFix(sim.time, 20.0, 8.0, 40.0))
+        engine.onSpeedFix(SpeedFix(sim.time, 20.0, 8.0, 40.0))
         assertEquals(SpeedSource.ACQUIRING, engine.snapshot().speedSource)
     }
 
@@ -255,5 +255,17 @@ class TelemetryEngineTest {
         DriveLog.replay(BufferedReader(StringReader(text)), engine) { times += it }
         assertEquals(listOf(1.0, 1.005, 1.01), times)
         assertEquals(3.0, engine.snapshot().gpsHorizontalAccuracyM!!, 0.0)
+    }
+
+    @Test
+    fun carSpeedReadingsDriveTheSpeedAndReplay() {
+        val text = listOf(
+            DriveLog.accel(1_000_000_000L, 0f, 0f, 9.8f),
+            DriveLog.car(1_010_000_000L, 16.7f, 0.3f),
+        ).joinToString("\n")
+        DriveLog.replay(BufferedReader(StringReader(text)), engine)
+        val s = engine.snapshot()
+        assertEquals(SpeedSource.LIVE, s.speedSource)
+        assertEquals(16.7, s.speedMps!!, 0.01)
     }
 }

@@ -1,12 +1,15 @@
 package app.speedg
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Application
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -23,6 +26,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.speedg.core.AvailableUpdate
+import app.speedg.core.SpeedInput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +56,8 @@ class MainActivity : ComponentActivity() {
     private var hasPermission by mutableStateOf(false)
     private var useMph by mutableStateOf(false)
     private var rotation by mutableStateOf(RotationMode.AUTO)
+    private var obdDevices by mutableStateOf(emptyList<ObdDevice>())
+    private var needsBluetoothPermission by mutableStateOf(false)
 
     private val preferences by lazy { getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
@@ -60,6 +66,9 @@ class MainActivity : ComponentActivity() {
             hasPermission = checkPermission()
             if (hasPermission) viewModel.controller.start()
         }
+
+    private val bluetoothRequest =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { refreshObdDevices() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -82,14 +91,20 @@ class MainActivity : ComponentActivity() {
                 state = state,
                 update = update,
                 hasPermission = hasPermission,
-                useMph = useMph,
-                rotation = rotation,
+                settings = ScreenSettings(useMph, rotation, obdDevices, needsBluetoothPermission),
                 actions = ScreenActions(
                     requestPermission = ::requestPermission,
                     calibrate = controller::calibrate,
                     resetPeaks = controller::resetPeaks,
-                    toggleUnits = ::toggleUnits,
-                    cycleRotation = ::cycleRotation,
+                    setUseMph = ::setUnits,
+                    setRotation = ::setRotationMode,
+                    selectInput = ::selectInput,
+                    selectObdDevice = controller::selectObdDevice,
+                    requestBluetooth = ::requestBluetooth,
+                    selectCar = controller::selectCar,
+                    addCar = controller::addCar,
+                    renameCar = controller::renameCar,
+                    deleteCar = controller::deleteCar,
                     toggleRecording = controller::toggleRecording,
                     shareRecording = ::shareRecording,
                     downloadUpdate = ::downloadUpdate,
@@ -103,6 +118,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         hasPermission = checkPermission()
         if (hasPermission) viewModel.controller.start()
+        refreshObdDevices()
     }
 
     override fun onStop() {
@@ -120,14 +136,44 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private fun toggleUnits() {
-        useMph = !useMph
-        preferences.edit().putBoolean(KEY_MPH, useMph).apply()
+    private fun hasBluetoothPermission() =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun requestBluetooth() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            bluetoothRequest.launch(Manifest.permission.BLUETOOTH_CONNECT)
+        }
     }
 
-    private fun cycleRotation() {
-        rotation = rotation.next()
-        preferences.edit().putString(KEY_ROTATION, rotation.name).apply()
+    @SuppressLint("MissingPermission")
+    private fun refreshObdDevices() {
+        val allowed = hasBluetoothPermission()
+        needsBluetoothPermission = !allowed
+        if (!allowed) {
+            obdDevices = emptyList()
+            return
+        }
+        val bonded = getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
+        obdDevices = bonded.map { ObdDevice(it.name ?: it.address, it.address) }.sortedBy { it.name }
+    }
+
+    private fun selectInput(input: SpeedInput) {
+        viewModel.controller.selectInput(input)
+        if (input == SpeedInput.OBD) {
+            if (hasBluetoothPermission()) refreshObdDevices() else requestBluetooth()
+        }
+    }
+
+    private fun setUnits(mph: Boolean) {
+        useMph = mph
+        preferences.edit().putBoolean(KEY_MPH, mph).apply()
+    }
+
+    private fun setRotationMode(mode: RotationMode) {
+        rotation = mode
+        preferences.edit().putString(KEY_ROTATION, mode.name).apply()
         applyRotation()
     }
 

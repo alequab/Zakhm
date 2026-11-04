@@ -8,10 +8,11 @@ import java.io.BufferedReader
  *     A,<nanos>,<x>,<y>,<z>                accelerometer, m/s^2
  *     G,<nanos>,<x>,<y>,<z>                gyroscope, rad/s
  *     L,<nanos>,<speed>,<speedAcc>,<hAcc>  GPS fix, blank when not reported
+ *     C,<nanos>,<speed>,<speedAcc>         speed from the car
  *
- * Fixes are written in the order they arrived, so replaying reproduces the same
- * latency the phone saw. No position is recorded, so a log can't reveal where a
- * drive took place.
+ * Readings are written in the order they arrived, and only if the engine used
+ * them, so replaying reproduces what the phone did. No position is recorded, so
+ * a log can't reveal where a drive took place.
  */
 object DriveLog {
     const val HEADER = "# SpeedG drive log v1"
@@ -23,6 +24,8 @@ object DriveLog {
     fun gps(nanos: Long, speed: Float?, speedAccuracy: Float?, horizontalAccuracy: Float?) =
         "L,$nanos,${speed ?: ""},${speedAccuracy ?: ""},${horizontalAccuracy ?: ""}"
 
+    fun car(nanos: Long, speed: Float, speedAccuracy: Float) = "C,$nanos,$speed,$speedAccuracy"
+
     /** Feeds a recorded drive to [engine], calling [afterEvent] with each event's time in seconds. */
     fun replay(reader: BufferedReader, engine: TelemetryEngine, afterEvent: (Double) -> Unit = {}) {
         reader.forEachLine { line ->
@@ -32,12 +35,20 @@ object DriveLog {
             when (p[0]) {
                 "A" -> engine.onAccel(time, vector(p))
                 "G" -> engine.onGyro(time, vector(p))
-                "L" -> engine.onGps(
-                    GpsFix(
+                "L" -> engine.onSpeedFix(
+                    SpeedFix(
                         time = time,
                         speed = p[2].toDoubleOrNull(),
                         speedAccuracy = p[3].toDoubleOrNull(),
                         horizontalAccuracy = p[4].toDoubleOrNull(),
+                    ),
+                )
+                "C" -> engine.onSpeedFix(
+                    SpeedFix(
+                        time = time,
+                        speed = p[2].toDouble(),
+                        speedAccuracy = p[3].toDouble(),
+                        horizontalAccuracy = null,
                     ),
                 )
                 else -> return@forEachLine

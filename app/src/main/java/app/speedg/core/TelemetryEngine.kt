@@ -9,12 +9,12 @@ import kotlin.math.min
 const val STANDARD_GRAVITY = 9.80665
 
 /** Where the displayed speed comes from. */
-enum class SpeedSource { ACQUIRING, GPS, STOPPED, ESTIMATED, NO_GPS }
+enum class SpeedSource { ACQUIRING, LIVE, STOPPED, ESTIMATED, NO_SIGNAL }
 
 enum class CalibrationState { WAITING_FOR_STOP, LEARNING_FORWARD, READY }
 
-/** A GPS fix. [time] is when it was measured, in seconds on the same clock as the IMU. */
-data class GpsFix(
+/** A speed reading from GPS or the car. [time] is when it was measured, in seconds on the IMU clock. */
+data class SpeedFix(
     val time: Double,
     val speed: Double?,
     val speedAccuracy: Double?,
@@ -78,7 +78,7 @@ class TelemetryEngine {
 
     private var stopped = false
 
-    private var lastUsableFix: GpsFix? = null
+    private var lastUsableFix: SpeedFix? = null
     private var anchorTime = Double.NaN
     private var anchorSpeed = 0.0
     private var gpsSpeedAccuracy: Double? = null
@@ -125,7 +125,7 @@ class TelemetryEngine {
         }
     }
 
-    fun onGps(fix: GpsFix) {
+    fun onSpeedFix(fix: SpeedFix) {
         gpsHorizontalAccuracy = fix.horizontalAccuracy
         gpsSpeedAccuracy = fix.speedAccuracy
         val measured = fix.speed ?: return
@@ -154,6 +154,25 @@ class TelemetryEngine {
         peaks = Peaks()
     }
 
+    fun mountCalibration(): MountCalibration? = mountUp?.let { MountCalibration(it, forward) }
+
+    fun currentPeaks(): Peaks = peaks
+
+    /**
+     * Switches to a saved car's calibration and peaks. The calibration is only a
+     * starting point: a phone tilted differently is caught at the next stop, and a
+     * phone turned differently is corrected by fresh forward learning.
+     */
+    fun loadCar(mount: MountCalibration?, savedPeaks: Peaks) {
+        resetMount()
+        mountUp = mount?.up
+        gravityUp = mount?.up
+        forward = mount?.forward
+        peaks = savedPeaks
+        stopped = false
+        lastStopCheck = Double.NEGATIVE_INFINITY
+    }
+
     fun snapshot(): TelemetrySnapshot {
         val up = mountUp
         val fwd = forward
@@ -179,9 +198,9 @@ class TelemetryEngine {
         val source = speedSource()
         return TelemetrySnapshot(
             speedMps = when (source) {
-                SpeedSource.GPS, SpeedSource.ESTIMATED -> speedFilter.speed
+                SpeedSource.LIVE, SpeedSource.ESTIMATED -> speedFilter.speed
                 SpeedSource.STOPPED -> 0.0
-                SpeedSource.ACQUIRING, SpeedSource.NO_GPS -> null
+                SpeedSource.ACQUIRING, SpeedSource.NO_SIGNAL -> null
             },
             speedSource = source,
             speedSigmaMps = if (speedFilter.initialized) speedFilter.sigma else null,
@@ -206,10 +225,10 @@ class TelemetryEngine {
         if (stopped) return SpeedSource.STOPPED
         val age = now - fix.time
         return when {
-            age <= GPS_FRESH_SECONDS -> SpeedSource.GPS
+            age <= GPS_FRESH_SECONDS -> SpeedSource.LIVE
             forward != null && age <= MAX_ESTIMATE_SECONDS &&
                 speedFilter.sigma <= MAX_ESTIMATE_SIGMA -> SpeedSource.ESTIMATED
-            else -> SpeedSource.NO_GPS
+            else -> SpeedSource.NO_SIGNAL
         }
     }
 

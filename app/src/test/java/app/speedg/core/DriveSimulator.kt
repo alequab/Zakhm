@@ -50,7 +50,7 @@ class DriveSimulator(
     var gpsEnabled = true
 
     private var nextGpsTime = time
-    private val pendingFixes = ArrayDeque<GpsFix>()
+    private val pendingFixes = ArrayDeque<SpeedFix>()
 
     /** Runs [seconds] of motion, calling [observe] with the truth after each IMU sample. */
     fun run(seconds: Double, motion: (Double) -> CarMotion = { CarMotion() }, observe: (Truth) -> Unit = {}) {
@@ -92,11 +92,11 @@ class DriveSimulator(
             nextGpsTime += 1.0
             if (gpsEnabled) {
                 val measured = (speed + random.nextGaussian() * gpsNoise).coerceAtLeast(0.0)
-                pendingFixes.addLast(GpsFix(time, measured, 0.3, 4.0))
+                pendingFixes.addLast(SpeedFix(time, measured, 0.3, 4.0))
             }
         }
         while (pendingFixes.isNotEmpty() && time >= pendingFixes.first().time + gpsLatency) {
-            engine.onGps(pendingFixes.removeFirst())
+            engine.onSpeedFix(pendingFixes.removeFirst())
         }
     }
 
