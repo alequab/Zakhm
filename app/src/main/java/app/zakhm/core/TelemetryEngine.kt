@@ -71,6 +71,10 @@ class TelemetryEngine {
     private var rawGyro = Vec3.ZERO
     private var gyroBias = Vec3.ZERO
     private var gravityMagnitude = STANDARD_GRAVITY
+    private var calmForce: Vec3? = null
+    private var calmGyro = Vec3.ZERO
+    private var cruisingForce = Vec3.ZERO
+    private var cruisingSamples = 0
 
     private var mountUp: Vec3? = null
     private var forward: Vec3? = null
@@ -117,7 +121,13 @@ class TelemetryEngine {
             if (motion != null) smoothAndTrackPeaks(motion, dt)
         }
 
-        history.add(time, force, rawGyro, speedFilter.speed - speedFilter.cumulativeCorrection)
+        // A running engine shakes the phone far faster than a car moves, so measure stillness without it.
+        val calmAlpha = if (validDt) 1.0 - exp(-dt * CALM_RATE) else 1.0
+        val calm = calmForce?.let { it + (force - it) * calmAlpha } ?: force
+        calmForce = calm
+        calmGyro += (rawGyro - calmGyro) * calmAlpha
+
+        history.add(time, force, rawGyro, speedFilter.speed - speedFilter.cumulativeCorrection, calm, calmGyro)
 
         if (time - lastStopCheck >= STOP_CHECK_INTERVAL) {
             lastStopCheck = time
@@ -270,9 +280,17 @@ class TelemetryEngine {
             return
         }
 
+        // Without GPS, a smooth road can feel still, so the car must also have slowed down to count as stopped.
+        if (!gpsFresh && speedFilter.initialized && speedFilter.speed > GPS_STOPPED_SPEED) {
+            stopped = false
+            return
+        }
+
+        // With GPS also saying stopped, allow a rough idle, and only rule out someone moving the phone.
         val forceLimit = if (gpsFresh) STOP_FORCE_STD else STOP_FORCE_STD_NO_GPS
+        val gyroLimit = if (gpsFresh) STOP_GYRO_STD else STOP_GYRO_STD_NO_GPS
         val turning = (w.meanGyro - gyroBias).norm
-        stopped = w.forceStd < forceLimit && w.gyroStd < STOP_GYRO_STD && turning < STOP_GYRO_MEAN
+        stopped = w.forceStd < forceLimit && w.gyroStd < gyroLimit && turning < STOP_GYRO_MEAN
         if (stopped) onStopped(w)
     }
 
@@ -299,6 +317,30 @@ class TelemetryEngine {
         learner.reset()
         anchorTime = Double.NaN
         smoothedAccel = null
+        cruisingForce = Vec3.ZERO
+        cruisingSamples = 0
+    }
+
+    /**
+     * Finds "down" without waiting for a stop. At a steady speed in a straight line
+     * the only lasting force is gravity, so averaging a few intervals gives its direction.
+     */
+    private fun learnUpWhileCruising(w: WindowStats, speedChangeRate: Double, averageSpeed: Double) {
+        val steady = averageSpeed >= MIN_LEARNING_SPEED &&
+            abs(speedChangeRate) < MAX_CRUISING_RATE &&
+            (w.meanGyro - gyroBias).norm < MAX_CRUISING_TURN
+        if (!steady) {
+            cruisingForce = Vec3.ZERO
+            cruisingSamples = 0
+            return
+        }
+        cruisingForce += w.meanForce
+        cruisingSamples++
+        if (cruisingSamples >= CRUISING_SAMPLES_NEEDED) {
+            val up = cruisingForce.normalized()
+            mountUp = up
+            gravityUp = up
+        }
     }
 
     private fun learnFromFix(fixTime: Double, measured: Double) {
@@ -311,19 +353,27 @@ class TelemetryEngine {
         val interval = fixTime - previousAnchor
         if (interval > MAX_ANCHOR_SPACING) return
 
-        val up = mountUp ?: return
-        val tracked = gravityUp ?: return
         val w = history.window(previousAnchor, fixTime) ?: return
         val speedChangeRate = (measured - previousSpeed) / interval
         val averageSpeed = (measured + previousSpeed) / 2
+        val up = mountUp
+        val tracked = gravityUp
+        if (up == null || tracked == null) {
+            learnUpWhileCruising(w, speedChangeRate, averageSpeed)
+            return
+        }
         if (averageSpeed < MIN_LEARNING_SPEED) return
         val yawRate = (w.meanGyro - gyroBias) dot up
+        val turnAccel = averageSpeed * yawRate
 
+        val motion = (w.meanForce - tracked * gravityMagnitude).perpendicularTo(up)
         if (abs(speedChangeRate) >= MIN_LEARNING_RATE && abs(yawRate) < MAX_LEARNING_YAW_RATE) {
-            val motion = w.meanForce - tracked * gravityMagnitude
-            learner.add(speedChangeRate, motion.perpendicularTo(up))
-            learner.estimate(up)?.let { forward = it }
+            learner.add(speedChangeRate, motion)
+        } else if (abs(turnAccel) >= MIN_LEARNING_TURN && abs(speedChangeRate) < abs(turnAccel)) {
+            // A left turn pushes toward the car's left, and left crossed with up is forward.
+            learner.add(turnAccel, motion cross up)
         }
+        learner.estimate(up)?.let { forward = it }
 
         val fwd = forward ?: return
         val expectedMotion = fwd * speedChangeRate + (up cross fwd) * (averageSpeed * yawRate)
@@ -353,11 +403,13 @@ class TelemetryEngine {
 
         const val STOP_CHECK_INTERVAL = 0.1
         const val STOP_WINDOW_SECONDS = 1.5
-        const val STOP_FORCE_STD = 0.15
+        const val CALM_RATE = 2 * Math.PI * 2.0
+        const val STOP_FORCE_STD = 0.5
         const val STOP_FORCE_STD_NO_GPS = 0.08
-        const val STOP_GYRO_STD = 0.02
+        const val STOP_GYRO_STD = 0.1
+        const val STOP_GYRO_STD_NO_GPS = 0.02
         const val STOP_GYRO_MEAN = 0.05
-        const val GPS_STOPPED_SPEED = 0.5
+        const val GPS_STOPPED_SPEED = 0.8
         const val STOPPED_BLEND = 0.2
 
         /** More than any road slope: if gravity has moved this far, the phone was moved. */
@@ -366,8 +418,12 @@ class TelemetryEngine {
         const val MIN_ANCHOR_SPACING = 0.8
         const val MAX_ANCHOR_SPACING = 2.5
         const val MIN_LEARNING_SPEED = 3.0
-        const val MIN_LEARNING_RATE = 0.4
+        const val MIN_LEARNING_RATE = 0.3
         const val MAX_LEARNING_YAW_RATE = 0.06
+        const val MIN_LEARNING_TURN = 0.5
+        const val MAX_CRUISING_RATE = 0.2
+        const val MAX_CRUISING_TURN = 0.03
+        const val CRUISING_SAMPLES_NEEDED = 5
         const val MAX_GRAVITY_ERROR = 1.0
         const val GRAVITY_CORRECTION_SECONDS = 8.0
     }

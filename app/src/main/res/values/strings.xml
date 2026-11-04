@@ -3,8 +3,15 @@
     <string name="app_name">Zakhm</string>
 
     <string name="update_available">Update available: %1$s</string>
-    <string name="update_download">Download</string>
+    <string name="update_install">Update</string>
     <string name="update_later">Later</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_downloading">Downloading %1$s: %2$d%%</string>
+    <string name="update_installing">Installing %1$s. Confirm on the next screen</string>
+    <string name="update_permission">Allow installs for this app, then tap Update</string>
+    <string name="update_failed">Couldn\'t download the update</string>
+    <string name="update_install_failed">The update wasn\'t installed</string>
+    <string name="update_channel">Updates</string>
 
     <string name="location_rationale">%1$s needs precise location to read speed from GPS. Your location is never saved or sent anywhere.</string>
     <string name="location_allow">Allow precise location</string>
@@ -27,8 +34,8 @@
     <string name="status_accuracy">±%1$s %2$s</string>
     <string name="status_satellites">Satellites: %1$d</string>
 
-    <string name="calibrate_stop">Stop the car to calibrate</string>
-    <string name="calibrate_learning">Drive straight, speed up and brake gently: learning %1$d%%</string>
+    <string name="calibrate_stop">Finding the phone\'s angle. Keep it still, or just start driving</string>
+    <string name="calibrate_learning">Just drive normally: speed up, brake and turn. Learning %1$d%%</string>
     <string name="calibrating">Calibrating</string>
 
     <string name="unit_kmh">km/h</string>

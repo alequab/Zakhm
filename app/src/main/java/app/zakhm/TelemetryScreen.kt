@@ -73,7 +73,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.zakhm.core.AvailableUpdate
+
 import app.zakhm.core.CalibrationState
 import app.zakhm.core.CarProfile
 import app.zakhm.core.CarRegistry
@@ -129,7 +129,7 @@ class ScreenActions(
     val deleteCar: (String) -> Unit,
     val toggleRecording: () -> Unit,
     val shareRecording: (File) -> Unit,
-    val downloadUpdate: (AvailableUpdate) -> Unit,
+    val startUpdate: () -> Unit,
     val dismissUpdate: () -> Unit,
 )
 
@@ -170,7 +170,7 @@ private fun carName(car: CarProfile): String =
 @Composable
 fun TelemetryScreen(
     state: TelemetryUiState,
-    update: AvailableUpdate?,
+    update: UpdateState,
     hasPermission: Boolean,
     settings: ScreenSettings,
     actions: ScreenActions,
@@ -184,7 +184,7 @@ fun TelemetryScreen(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Column {
-                if (update != null) UpdateBanner(update, actions)
+                if (update != UpdateState.None) UpdateBanner(update, actions)
                 if (hasPermission) {
                     Dashboard(state, settings, actions)
                 } else {
@@ -196,22 +196,40 @@ fun TelemetryScreen(
 }
 
 @Composable
-private fun UpdateBanner(update: AvailableUpdate, actions: ScreenActions) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            stringResource(R.string.update_available, update.version),
-            Modifier.weight(1f),
-            color = Accent,
-            fontSize = 13.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        CompactButton(stringResource(R.string.update_download), { actions.downloadUpdate(update) })
-        CompactButton(stringResource(R.string.update_later), actions.dismissUpdate)
+private fun UpdateBanner(state: UpdateState, actions: ScreenActions) {
+    val version = state.update?.versionName.orEmpty()
+    val message = when (state) {
+        is UpdateState.Downloading -> stringResource(R.string.update_downloading, version, state.percent)
+        is UpdateState.Installing -> stringResource(R.string.update_installing, version)
+        is UpdateState.NeedsPermission -> stringResource(R.string.update_permission)
+        is UpdateState.Failed -> stringResource(R.string.update_failed)
+        else -> stringResource(R.string.update_available, version)
+    }
+    val busy = state is UpdateState.Downloading || state is UpdateState.Installing
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                message,
+                Modifier.weight(1f),
+                color = if (state is UpdateState.Failed) Alert else Accent,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!busy) {
+                val action = if (state is UpdateState.Failed) R.string.update_retry else R.string.update_install
+                CompactButton(stringResource(action), actions.startUpdate)
+                CompactButton(stringResource(R.string.update_later), actions.dismissUpdate)
+            }
+        }
+        val notes = state.update?.notes.orEmpty()
+        if (state is UpdateState.Available && notes.isNotBlank()) {
+            Text(notes, color = Secondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

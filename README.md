@@ -67,7 +67,7 @@
 </tr>
 <tr>
 <td valign="top"><b>تسجيل الرحلة</b><br>يحفظ قراءات الحساسات في ملف يمكنك مشاركته، بدون أي بيانات موقع.</td>
-<td valign="top"><b>تنبيهات التحديث</b><br>يخبرك التطبيق عند صدور إصدار جديد، ويبقى التثبيت بموافقتك.</td>
+<td valign="top"><b>تحديث من داخل التطبيق</b><br>إشعار عند صدور إصدار جديد، وتنزيل موثَّق بضغطة، ويبقى التثبيت بموافقتك.</td>
 </tr>
 </table>
 
@@ -83,7 +83,7 @@
 
 1. ثبّت الهاتف جيدًا في حامل والسيارة متوقفة، واتركه ثابتًا بضع ثوانٍ.
 2. انتظر في الخارج حتى تختفي رسالة GPS.
-3. على طريق آمن ومستقيم، زد السرعة وخففها بلطف عدة مرات حتى تختفي رسالة المعايرة.
+3. قُد بشكل طبيعي، فتختفي رسالة المعايرة بعد تغييرات قليلة في السرعة أو بعض المنعطفات.
 
 إذا حرّكت الهاتف داخل الحامل، فاضغط أيقونة الإعدادات ثم **معايرة**.
 
@@ -106,7 +106,7 @@ flowchart LR
 - **ثبّت الهاتف في حامل متين.** فالحامل المهتز يضيف أخطاء لا يزيلها التطبيق بالكامل.
 - **موقعك لا يخرج من هاتفك.** يُستخدم لقراءة سرعة GPS فقط، ولا يُحفظ ولا يُرسل إلى أي جهة.
 - **بياناتك على هاتفك.** تبقى السيارات المحفوظة، بما فيها رقم الهيكل وعنوان محوّل البلوتوث، في مساحة التخزين الخاصة بالتطبيق. ولا تحتوي تسجيلات الرحلات على موقع أو رقم هيكل، وتبقى على هاتفك ما لم تشاركها.
-- **اتصال واحد بالإنترنت.** عند كل تشغيل، يسأل التطبيق خادم التحديث عن رقم أحدث إصدار. لا يرسل هذا الطلب أي بيانات حساسات أو موقع، لكن يمكن للخادم رؤية عنوان IP الخاص بك كما في أي طلب عبر الإنترنت.
+- **الإنترنت للتحديثات فقط.** عند كل تشغيل وكل 12 ساعة في الخلفية، يسأل التطبيق خادم التحديث عن أحدث إصدار، ولا يُنزّل التحديث إلا إذا ضغطت تحديث. لا ترسل هذه الطلبات أي بيانات حساسات أو موقع، لكن يمكن للخادم رؤية عنوان IP الخاص بك كما في أي طلب عبر الإنترنت.
 
 ### ما يجب معرفته
 
@@ -204,7 +204,7 @@ flowchart LR
 </tr>
 <tr>
 <td valign="top"><b>Drive recording</b><br>Saves sensor readings to a file you can share, with no location data.</td>
-<td valign="top"><b>Update alerts</b><br>The app tells you when a new version is out, and you approve the install.</td>
+<td valign="top"><b>In-app updates</b><br>A notification when a new version is out, a verified one-tap download, and you approve the install.</td>
 </tr>
 </table>
 
@@ -220,7 +220,7 @@ flowchart LR
 
 1. Fix the phone firmly in a mount while the car is parked, and keep it still for a few seconds.
 2. Wait outside until the GPS message clears.
-3. On a safe, straight road, speed up and slow down gently a few times until the calibration message clears.
+3. Drive normally. The calibration message clears after a few speed changes or turns.
 
 If you move the phone in its mount, tap the settings icon, then **Calibrate**.
 
@@ -239,7 +239,7 @@ flowchart LR
 - **Use a firm mount.** A shaky mount adds errors the app can't fully remove.
 - **Your location stays on your phone.** It's used only to read GPS speed, and it's never saved or sent anywhere.
 - **Your data stays on your phone.** Saved cars, including any VIN or Bluetooth adapter address, stay in the app's private storage. Drive recordings contain no position or VIN, and stay on your phone unless you share them.
-- **One internet request.** Each time it starts, the app asks an update server for the newest version number. That request sends no sensor or location data, though the server can see your IP address, as with any internet request.
+- **Internet for updates only.** Each time it starts and every 12 hours in the background, the app asks an update server for the newest version, and only downloads it if you tap Update. These requests send no sensor or location data, though the server can see your IP address, as with any internet request.
 
 ### Good to know
 

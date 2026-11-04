@@ -3,8 +3,15 @@
     <string name="app_name">زخم</string>
 
     <string name="update_available">يتوفر تحديث: %1$s</string>
-    <string name="update_download">تنزيل</string>
+    <string name="update_install">تحديث</string>
     <string name="update_later">لاحقًا</string>
+    <string name="update_retry">إعادة المحاولة</string>
+    <string name="update_downloading">جارٍ تنزيل %1$s: %2$d%%</string>
+    <string name="update_installing">جارٍ تثبيت %1$s. أكّد في الشاشة التالية</string>
+    <string name="update_permission">اسمح بالتثبيت لهذا التطبيق، ثم اضغط تحديث</string>
+    <string name="update_failed">تعذّر تنزيل التحديث</string>
+    <string name="update_install_failed">لم يُثبَّت التحديث</string>
+    <string name="update_channel">التحديثات</string>
 
     <string name="location_rationale">يحتاج %1$s إلى موقعك الدقيق لقراءة السرعة من GPS. لا يُحفظ موقعك ولا يُرسل إلى أي جهة.</string>
     <string name="location_allow">السماح بالموقع الدقيق</string>
@@ -27,8 +34,8 @@
     <string name="status_accuracy">±%1$s %2$s</string>
     <string name="status_satellites">الأقمار الصناعية: %1$d</string>
 
-    <string name="calibrate_stop">أوقف السيارة للمعايرة</string>
-    <string name="calibrate_learning">سر في خط مستقيم، وزد السرعة وفرمل بلطف: اكتمل التعلم %1$d%%</string>
+    <string name="calibrate_stop">جارٍ تحديد زاوية الهاتف. أبقِه ثابتًا، أو ابدأ القيادة فقط</string>
+    <string name="calibrate_learning">قُد بشكل طبيعي: زد السرعة وفرمل وانعطف. اكتمل التعلم %1$d%%</string>
     <string name="calibrating">جارٍ المعايرة</string>
 
     <string name="unit_kmh">كم/س</string>

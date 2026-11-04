@@ -35,6 +35,11 @@ class DriveSimulator(
     private val gyroNoise: Double = 0.003,
     private val gpsNoise: Double = 0.15,
     private val gpsLatency: Double = 0.3,
+    /** Strength of a running engine's 25 Hz shake, in m/s^2. */
+    private val idleVibration: Double = 0.0,
+    /** Strength of someone slowly moving the phone around by hand, in m/s^2. */
+    private val handling: Double = 0.0,
+    startSpeed: Double = 0.0,
     seed: Long = 42,
 ) {
     private val random = Random(seed)
@@ -43,7 +48,7 @@ class DriveSimulator(
 
     var time = 100.0
         private set
-    var speed = 0.0
+    var speed = startSpeed
         private set
     var pitch = 0.0
         private set
@@ -85,8 +90,12 @@ class DriveSimulator(
             STANDARD_GRAVITY * cos(pitch),
         )
         val vibration = if (moving) accelNoise else accelNoise / 2
-        engine.onGyro(time, toPhone(gyroCar) + gyroBias + noise(gyroNoise))
-        engine.onAccel(time, toPhone(forceCar) + accelBias + noise(vibration))
+        val shake = sin(2 * Math.PI * 25.0 * time)
+        val sway = sin(2 * Math.PI * 0.7 * time)
+        val shakeForce = Vec3(idleVibration * shake + handling * sway, idleVibration * shake * 0.5, idleVibration * shake)
+        val shakeGyro = Vec3(0.06 * shake * idleVibration + 0.4 * sway * handling, 0.0, 0.03 * shake * idleVibration)
+        engine.onGyro(time, toPhone(gyroCar + shakeGyro) + gyroBias + noise(gyroNoise))
+        engine.onAccel(time, toPhone(forceCar + shakeForce) + accelBias + noise(vibration))
 
         if (time >= nextGpsTime) {
             nextGpsTime += 1.0

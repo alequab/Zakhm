@@ -11,7 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.net.Uri
+
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -31,26 +31,64 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import app.zakhm.core.AvailableUpdate
+
 import app.zakhm.core.SpeedInput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 
 class TelemetryViewModel(application: Application) : AndroidViewModel(application) {
     val controller = TelemetryController(application)
 
-    private val _update = MutableStateFlow<AvailableUpdate?>(null)
-    val update: StateFlow<AvailableUpdate?> = _update
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.None)
+    val update: StateFlow<UpdateState> = _update
 
     init {
-        viewModelScope.launch(Dispatchers.IO) { _update.value = UpdateChecker.check() }
+        checkForUpdate()
+    }
+
+    /** Looks for a new release, unless one is already being handled. */
+    fun checkForUpdate() {
+        if (_update.value != UpdateState.None) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val found = try {
+                Updater.check(getApplication())
+            } catch (_: IOException) {
+                null
+            }
+            if (found != null && _update.value == UpdateState.None) _update.value = UpdateState.Available(found)
+        }
+    }
+
+    fun startUpdate() {
+        val current = _update.value
+        if (current is UpdateState.Downloading || current is UpdateState.Installing) return
+        val found = current.update ?: return
+        val context = getApplication<Application>()
+        if (!Updater.canInstall(context)) {
+            _update.value = UpdateState.NeedsPermission(found)
+            Updater.openInstallPermission(context)
+            return
+        }
+        _update.value = UpdateState.Downloading(found, 0)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val apk = Updater.download(context, found) { percent ->
+                    _update.value = UpdateState.Downloading(found, percent)
+                }
+                _update.value = UpdateState.Installing(found)
+                Updater.install(context, apk)
+            } catch (_: IOException) {
+                _update.value = UpdateState.Failed(found)
+            }
+        }
     }
 
     fun dismissUpdate() {
-        _update.value = null
+        _update.value = UpdateState.None
     }
 
     override fun onCleared() = controller.shutdown()
@@ -101,7 +139,8 @@ class MainActivity : ComponentActivity() {
         applyRotation()
 
         hasPermission = checkPermission()
-        if (!hasPermission) requestPermission()
+        if (!hasPermission) requestPermission() else askForNotificationsOnce()
+        Updater.schedule(this)
 
         val controller = viewModel.controller
         setContent {
@@ -136,11 +175,17 @@ class MainActivity : ComponentActivity() {
                     deleteCar = controller::deleteCar,
                     toggleRecording = controller::toggleRecording,
                     shareRecording = ::shareRecording,
-                    downloadUpdate = ::downloadUpdate,
+                    startUpdate = viewModel::startUpdate,
                     dismissUpdate = viewModel::dismissUpdate,
                 ),
             )
         }
+    }
+
+    /** Tapping the update notification while the app is already open arrives here. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(Updater.EXTRA_SHOW_UPDATE, false)) viewModel.checkForUpdate()
     }
 
     override fun onStart() {
@@ -161,9 +206,17 @@ class MainActivity : ComponentActivity() {
             PackageManager.PERMISSION_GRANTED
 
     private fun requestPermission() {
-        permissionRequest.launch(
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-        )
+        val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissions += Manifest.permission.POST_NOTIFICATIONS
+        permissionRequest.launch(permissions.toTypedArray())
+    }
+
+    /** For people who allowed location before update notifications existed. Asks only once. */
+    private fun askForNotificationsOnce() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (preferences.getBoolean(KEY_ASKED_NOTIFICATIONS, false)) return
+        preferences.edit().putBoolean(KEY_ASKED_NOTIFICATIONS, true).apply()
+        permissionRequest.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
     }
 
     private fun hasBluetoothPermission() =
@@ -246,10 +299,6 @@ class MainActivity : ComponentActivity() {
         getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(language.tag)
     }
 
-    private fun downloadUpdate(update: AvailableUpdate) {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.url)))
-    }
-
     private fun shareRecording(file: File) {
         val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
         val send = Intent(Intent.ACTION_SEND)
@@ -262,6 +311,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val KEY_MPH = "use_mph"
         const val KEY_ROTATION = "rotation"
+        const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
         const val SCAN_DURATION_MS = 10_000L
         val BLUETOOTH_PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
     }
