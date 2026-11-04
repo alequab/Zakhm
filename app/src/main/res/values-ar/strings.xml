@@ -1,4 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">زخم</string>
+
+    <string name="update_available">يتوفر تحديث: %1$s</string>
+    <string name="update_download">تنزيل</string>
+    <string name="update_later">لاحقًا</string>
+
+    <string name="location_rationale">يحتاج %1$s إلى موقعك الدقيق لقراءة السرعة من GPS. لا يُحفظ موقعك ولا يُرسل إلى أي جهة.</string>
+    <string name="location_allow">السماح بالموقع الدقيق</string>
+    <string name="settings">الإعدادات</string>
+
+    <string name="status_using_gps">%1$s · يُستخدم GPS</string>
+    <string name="status_auto_no_speed">Android Auto لا يرسل السرعة</string>
+    <string name="status_obd_choose">اختر محوّل OBD-II من الإعدادات</string>
+    <string name="status_obd_connecting">جارٍ الاتصال بـ OBD-II</string>
+    <string name="status_obd_waiting">تم الاتصال بـ OBD-II، بانتظار السرعة</string>
+    <string name="status_obd_no_answer">السيارة لا تستجيب عبر OBD-II</string>
+    <string name="status_obd_failed">تعذّر الوصول إلى محوّل OBD-II</string>
+    <string name="status_obd_live">OBD-II · سرعة السيارة</string>
+    <string name="status_auto_live">Android Auto · سرعة السيارة</string>
+    <string name="status_location_off">شغّل الموقع من إعدادات الهاتف</string>
+    <string name="status_waiting_gps">بانتظار GPS. يحتاج إلى رؤية واضحة للسماء</string>
+    <string name="status_no_signal">لا توجد إشارة سرعة</string>
+    <string name="status_gps_lost">انقطع GPS: السرعة تقديرية</string>
+    <string name="status_gps">GPS</string>
+    <string name="status_accuracy">±%1$s %2$s</string>
+    <string name="status_satellites">الأقمار الصناعية: %1$d</string>
+
+    <string name="calibrate_stop">أوقف السيارة للمعايرة</string>
+    <string name="calibrate_learning">سر في خط مستقيم، وزد السرعة وفرمل بلطف: اكتمل التعلم %1$d%%</string>
+    <string name="calibrating">جارٍ المعايرة</string>
+
+    <string name="unit_kmh">كم/س</string>
+    <string name="unit_mph">ميل/س</string>
+    <string name="unit_g">G</string>
+
+    <string name="meter_accel">تسارع</string>
+    <string name="meter_brake">فرملة</string>
+    <string name="meter_left">يسار</string>
+    <string name="meter_right">يمين</string>
+    <string name="peak_accel">تسارع</string>
+    <string name="peak_brake">فرملة</string>
+    <string name="peak_left">يسار</string>
+    <string name="peak_right">يمين</string>
+
+    <string name="section_car">السيارة</string>
+    <string name="section_source">مصدر السرعة</string>
+    <string name="section_units">الوحدات</string>
+    <string name="section_screen">الشاشة</string>
+    <string name="section_language">اللغة</string>
+    <string name="section_tools">الأدوات</string>
+
+    <string name="car_default_name">سيارتي</string>
+    <string name="car_vin_name">سيارة %1$s</string>
+    <string name="car_add">إضافة سيارة</string>
+    <string name="car_rename">إعادة تسمية</string>
+    <string name="car_delete">حذف</string>
+    <string name="car_add_title">إضافة سيارة</string>
+    <string name="car_rename_title">إعادة تسمية السيارة</string>
+    <string name="car_delete_title">حذف %1$s؟</string>
+    <string name="car_delete_body">ستُحذف المعايرة وأعلى القيم المحفوظة لها.</string>
+    <string name="car_name_label">الاسم</string>
+    <string name="save">حفظ</string>
+    <string name="cancel">إلغاء</string>
+    <string name="car_hint_saved">تحتفظ كل سيارة بمصدر السرعة والمعايرة وأعلى القيم الخاصة بها.</string>
+    <string name="car_hint_vin">تم التعرف عليها تلقائيًا برقم الهيكل عبر OBD-II.</string>
+    <string name="car_hint_model">تم التعرف عليها تلقائيًا من طرازها عبر Android Auto.</string>
+    <string name="car_hint_unknown">يمكن لـ OBD-II أو Android Auto التعرف على السيارة تلقائيًا إذا كانت تشارك رقم هيكلها أو طرازها.</string>
+    <string name="car_notice_new">حُفظت سيارة جديدة: %1$s</string>
+    <string name="car_notice_recognized">تم التعرف على: %1$s</string>
+
+    <string name="source_phone">GPS الهاتف</string>
+    <string name="source_obd">OBD-II</string>
+    <string name="source_auto">Android Auto</string>
+    <string name="source_hint_phone">تأتي السرعة من GPS الهاتف وحساسات الحركة.</string>
+    <string name="source_hint_auto">افتح التطبيق على شاشة السيارة وأبقِه مفتوحًا هنا أيضًا. لا تشارك كل السيارات سرعتها. يجب السماح بالمصادر غير المعروفة في إعدادات المطوّر في Android Auto.</string>
+    <string name="source_hint_general">تأتي قوة G دائمًا من الهاتف. وإذا توقف مصدر السيارة، تتحول السرعة إلى GPS.</string>
+
+    <string name="obd_needs_permission">يلزم إذن البلوتوث للعثور على المحوّل والوصول إليه.</string>
+    <string name="obd_allow_bluetooth">السماح بالبلوتوث</string>
+    <string name="obd_hint">أقرن محوّل ELM327 بالبلوتوث الكلاسيكي من إعدادات أندرويد، أو ابحث عن محوّل Bluetooth LE، ثم اختره هنا.</string>
+    <string name="obd_none_found">لم يُعثر على محوّلات.</string>
+    <string name="obd_scan">البحث عن محوّلات Bluetooth LE</string>
+    <string name="obd_scanning">جارٍ البحث…</string>
+
+    <string name="rotation_auto">تلقائي</string>
+    <string name="rotation_portrait">رأسي</string>
+    <string name="rotation_landscape">أفقي</string>
+
+    <string name="language_system">لغة الهاتف</string>
+    <string name="language_arabic">العربية</string>
+    <string name="language_english">English</string>
+
+    <string name="tool_calibrate">معايرة</string>
+    <string name="tool_reset_peaks">تصفير أعلى القيم</string>
+    <string name="tool_record">تسجيل الرحلة</string>
+    <string name="tool_stop_recording">إيقاف التسجيل</string>
+    <string name="tool_share_recording">مشاركة التسجيل</string>
+    <string name="share_title">مشاركة تسجيل الرحلة</string>
+    <string name="recording_error_start">تعذّر بدء التسجيل</string>
+    <string name="recording_error_finish">تعذّر إنهاء التسجيل</string>
+    <string name="recording_error_write">فشل التسجيل</string>
+
+    <string name="auto_needs_permission">يحتاج التطبيق إلى إذن لقراءة سرعة هذه السيارة. توقف ثم اسمح بذلك.</string>
+    <string name="auto_sending">تُرسل سرعة السيارة إلى هاتفك. أبقِ التطبيق مفتوحًا على الهاتف لرؤيتها.</string>
+    <string name="auto_waiting">بانتظار السرعة من هذه السيارة. لا تشاركها كل السيارات.</string>
+    <string name="auto_allow">سماح</string>
+    <string name="auto_using_gps">يُستخدم GPS الهاتف بدلًا من ذلك</string>
 </resources>

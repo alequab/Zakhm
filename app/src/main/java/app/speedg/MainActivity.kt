@@ -3,7 +3,10 @@ package app.speedg
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
+import android.app.LocaleManager
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -11,6 +14,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.LocaleList
+import android.os.Looper
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -56,10 +62,13 @@ class MainActivity : ComponentActivity() {
     private var hasPermission by mutableStateOf(false)
     private var useMph by mutableStateOf(false)
     private var rotation by mutableStateOf(RotationMode.AUTO)
-    private var obdDevices by mutableStateOf(emptyList<ObdDevice>())
+    private var pairedDevices by mutableStateOf(emptyList<ObdDevice>())
+    private var scannedDevices by mutableStateOf(emptyList<ObdDevice>())
+    private var scanning by mutableStateOf(false)
     private var needsBluetoothPermission by mutableStateOf(false)
 
     private val preferences by lazy { getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val permissionRequest =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -68,7 +77,18 @@ class MainActivity : ComponentActivity() {
         }
 
     private val bluetoothRequest =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { refreshObdDevices() }
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refreshObdDevices() }
+
+    private val scanCallback = object : ScanCallback() {
+        @SuppressLint("MissingPermission")
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val name = result.device.name ?: result.scanRecord?.deviceName ?: return
+            val address = result.device.address
+            if (scannedDevices.none { it.address == address }) {
+                scannedDevices = scannedDevices + ObdDevice(name, address)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -91,16 +111,25 @@ class MainActivity : ComponentActivity() {
                 state = state,
                 update = update,
                 hasPermission = hasPermission,
-                settings = ScreenSettings(useMph, rotation, obdDevices, needsBluetoothPermission),
+                settings = ScreenSettings(
+                    useMph = useMph,
+                    rotation = rotation,
+                    obdDevices = (pairedDevices + scannedDevices).distinctBy { it.address },
+                    scanningForAdapters = scanning,
+                    needsBluetoothPermission = needsBluetoothPermission,
+                    language = currentLanguage(),
+                ),
                 actions = ScreenActions(
                     requestPermission = ::requestPermission,
                     calibrate = controller::calibrate,
                     resetPeaks = controller::resetPeaks,
                     setUseMph = ::setUnits,
                     setRotation = ::setRotationMode,
+                    setLanguage = ::setLanguage,
                     selectInput = ::selectInput,
                     selectObdDevice = controller::selectObdDevice,
                     requestBluetooth = ::requestBluetooth,
+                    scanForAdapters = ::scanForAdapters,
                     selectCar = controller::selectCar,
                     addCar = controller::addCar,
                     renameCar = controller::renameCar,
@@ -123,6 +152,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        stopScan()
         viewModel.controller.stop()
     }
 
@@ -138,13 +168,12 @@ class MainActivity : ComponentActivity() {
 
     private fun hasBluetoothPermission() =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
-            PackageManager.PERMISSION_GRANTED
+            BLUETOOTH_PERMISSIONS.all {
+                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            }
 
     private fun requestBluetooth() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            bluetoothRequest.launch(Manifest.permission.BLUETOOTH_CONNECT)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) bluetoothRequest.launch(BLUETOOTH_PERMISSIONS)
     }
 
     @SuppressLint("MissingPermission")
@@ -152,11 +181,30 @@ class MainActivity : ComponentActivity() {
         val allowed = hasBluetoothPermission()
         needsBluetoothPermission = !allowed
         if (!allowed) {
-            obdDevices = emptyList()
+            pairedDevices = emptyList()
             return
         }
         val bonded = getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
-        obdDevices = bonded.map { ObdDevice(it.name ?: it.address, it.address) }.sortedBy { it.name }
+        pairedDevices = bonded.map { ObdDevice(it.name ?: it.address, it.address) }.sortedBy { it.name }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun scanForAdapters() {
+        if (scanning) return
+        if (!hasBluetoothPermission()) return requestBluetooth()
+        val scanner = getSystemService(BluetoothManager::class.java)?.adapter?.bluetoothLeScanner ?: return
+        scannedDevices = emptyList()
+        scanning = true
+        scanner.startScan(scanCallback)
+        mainHandler.postDelayed(::stopScan, SCAN_DURATION_MS)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopScan() {
+        if (!scanning) return
+        scanning = false
+        mainHandler.removeCallbacksAndMessages(null)
+        getSystemService(BluetoothManager::class.java)?.adapter?.bluetoothLeScanner?.stopScan(scanCallback)
     }
 
     private fun selectInput(input: SpeedInput) {
@@ -186,6 +234,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Null below Android 13, which has no per-app language; the app then follows the phone. */
+    private fun currentLanguage(): AppLanguage? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val tags = getSystemService(LocaleManager::class.java).applicationLocales.toLanguageTags()
+        return AppLanguage.entries.firstOrNull { it.tag.isNotEmpty() && tags.startsWith(it.tag) } ?: AppLanguage.PHONE
+    }
+
+    private fun setLanguage(language: AppLanguage) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(language.tag)
+    }
+
     private fun downloadUpdate(update: AvailableUpdate) {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.url)))
     }
@@ -196,11 +256,13 @@ class MainActivity : ComponentActivity() {
             .setType("application/gzip")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(Intent.createChooser(send, "Share drive recording"))
+        startActivity(Intent.createChooser(send, getString(R.string.share_title)))
     }
 
     private companion object {
         const val KEY_MPH = "use_mph"
         const val KEY_ROTATION = "rotation"
+        const val SCAN_DURATION_MS = 10_000L
+        val BLUETOOTH_PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
     }
 }

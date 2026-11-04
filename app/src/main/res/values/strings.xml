@@ -1,4 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SpeedG</string>
+
+    <string name="update_available">Update available: %1$s</string>
+    <string name="update_download">Download</string>
+    <string name="update_later">Later</string>
+
+    <string name="location_rationale">%1$s needs precise location to read speed from GPS. Your location is never saved or sent anywhere.</string>
+    <string name="location_allow">Allow precise location</string>
+    <string name="settings">Settings</string>
+
+    <string name="status_using_gps">%1$s · using GPS</string>
+    <string name="status_auto_no_speed">Android Auto not sending speed</string>
+    <string name="status_obd_choose">Choose an OBD-II adapter in settings</string>
+    <string name="status_obd_connecting">Connecting to OBD-II</string>
+    <string name="status_obd_waiting">OBD-II connected, waiting for speed</string>
+    <string name="status_obd_no_answer">Car isn\'t answering OBD-II</string>
+    <string name="status_obd_failed">Can\'t reach the OBD-II adapter</string>
+    <string name="status_obd_live">OBD-II · car speed</string>
+    <string name="status_auto_live">Android Auto · car speed</string>
+    <string name="status_location_off">Turn on Location in phone settings</string>
+    <string name="status_waiting_gps">Waiting for GPS. Needs a clear view of the sky</string>
+    <string name="status_no_signal">No speed signal</string>
+    <string name="status_gps_lost">GPS lost: speed is an estimate</string>
+    <string name="status_gps">GPS</string>
+    <string name="status_accuracy">±%1$s %2$s</string>
+    <string name="status_satellites">Satellites: %1$d</string>
+
+    <string name="calibrate_stop">Stop the car to calibrate</string>
+    <string name="calibrate_learning">Drive straight, speed up and brake gently: learning %1$d%%</string>
+    <string name="calibrating">Calibrating</string>
+
+    <string name="unit_kmh">km/h</string>
+    <string name="unit_mph">mph</string>
+    <string name="unit_g">G</string>
+
+    <string name="meter_accel">ACCEL</string>
+    <string name="meter_brake">BRAKE</string>
+    <string name="meter_left">L</string>
+    <string name="meter_right">R</string>
+    <string name="peak_accel">ACCEL</string>
+    <string name="peak_brake">BRAKE</string>
+    <string name="peak_left">LEFT</string>
+    <string name="peak_right">RIGHT</string>
+
+    <string name="section_car">Car</string>
+    <string name="section_source">Speed source</string>
+    <string name="section_units">Units</string>
+    <string name="section_screen">Screen</string>
+    <string name="section_language">Language</string>
+    <string name="section_tools">Tools</string>
+
+    <string name="car_default_name">My car</string>
+    <string name="car_vin_name">Car %1$s</string>
+    <string name="car_add">Add car</string>
+    <string name="car_rename">Rename</string>
+    <string name="car_delete">Delete</string>
+    <string name="car_add_title">Add a car</string>
+    <string name="car_rename_title">Rename car</string>
+    <string name="car_delete_title">Delete %1$s?</string>
+    <string name="car_delete_body">Its saved calibration and peak values will be removed.</string>
+    <string name="car_name_label">Name</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="car_hint_saved">Each car keeps its own speed source, calibration and peak values.</string>
+    <string name="car_hint_vin">Recognized automatically by its VIN over OBD-II.</string>
+    <string name="car_hint_model">Recognized automatically by its model over Android Auto.</string>
+    <string name="car_hint_unknown">OBD-II or Android Auto can recognize a car automatically if it shares its VIN or model.</string>
+    <string name="car_notice_new">New car saved: %1$s</string>
+    <string name="car_notice_recognized">Recognized: %1$s</string>
+
+    <string name="source_phone">Phone GPS</string>
+    <string name="source_obd">OBD-II</string>
+    <string name="source_auto">Android Auto</string>
+    <string name="source_hint_phone">Speed comes from the phone\'s GPS and motion sensors.</string>
+    <string name="source_hint_auto">Open the app on the car screen and keep it open here too. Not every car shares its speed. Android Auto must allow unknown sources in its developer settings.</string>
+    <string name="source_hint_general">G-force always comes from the phone. If a car source stops, speed switches to GPS.</string>
+
+    <string name="obd_needs_permission">Bluetooth permission is needed to find and reach your adapter.</string>
+    <string name="obd_allow_bluetooth">Allow Bluetooth</string>
+    <string name="obd_hint">Pair a classic Bluetooth ELM327 adapter in Android\'s settings, or scan for a Bluetooth LE one, then choose it here.</string>
+    <string name="obd_none_found">No adapters found.</string>
+    <string name="obd_scan">Scan for Bluetooth LE adapters</string>
+    <string name="obd_scanning">Scanning…</string>
+
+    <string name="rotation_auto">Auto</string>
+    <string name="rotation_portrait">Portrait</string>
+    <string name="rotation_landscape">Landscape</string>
+
+    <string name="language_system">Phone</string>
+    <string name="language_arabic">العربية</string>
+    <string name="language_english">English</string>
+
+    <string name="tool_calibrate">Calibrate</string>
+    <string name="tool_reset_peaks">Reset peaks</string>
+    <string name="tool_record">Record drive</string>
+    <string name="tool_stop_recording">Stop recording</string>
+    <string name="tool_share_recording">Share recording</string>
+    <string name="share_title">Share drive recording</string>
+    <string name="recording_error_start">Could not start recording</string>
+    <string name="recording_error_finish">Could not finish recording</string>
+    <string name="recording_error_write">Recording failed</string>
+
+    <string name="auto_needs_permission">This app needs permission to read this car\'s speed. Park, then allow it.</string>
+    <string name="auto_sending">Sending car speed to your phone. Keep the app open on the phone to see it.</string>
+    <string name="auto_waiting">Waiting for speed from this car. Not every car shares it.</string>
+    <string name="auto_allow">Allow</string>
+    <string name="auto_using_gps">Using the phone\'s GPS instead</string>
 </resources>

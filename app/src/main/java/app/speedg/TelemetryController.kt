@@ -317,7 +317,8 @@ class TelemetryController(private val context: Context) {
         val car = cars.active
         if (car.id != before.id) applyActiveCar() else applyActiveSource()
         if (car.id != before.id || car.identityKey != before.identityKey) {
-            carNotice = if (result.isNew) "New car saved: ${car.name}" else "Recognized: ${car.name}"
+            val notice = if (result.isNew) R.string.car_notice_new else R.string.car_notice_recognized
+            carNotice = context.getString(notice, car.name)
             carNoticeUntil = SystemClock.elapsedRealtime() + CAR_NOTICE_MS
         }
         saveCars()
@@ -329,11 +330,15 @@ class TelemetryController(private val context: Context) {
         val adapter = bluetoothManager?.adapter
         if (router.selected != SpeedInput.OBD || address == null || adapter == null) return
         obdConnection = ObdConnection(
+            context = context,
             adapter = adapter,
             address = address,
             onState = { state -> handler.post { obdState = state } },
             onSpeed = { kmh, nanos -> handler.post { onObdSpeed(kmh, nanos) } },
-            onVin = { vin -> handler.post { onCarIdentified(CarIdentity.fromVin(vin), viaObd = true) } },
+            onVin = { vin ->
+                val name = context.getString(R.string.car_vin_name, vin.takeLast(CarIdentity.VIN_NAME_LENGTH))
+                handler.post { onCarIdentified(CarIdentity.fromVin(vin, name), viaObd = true) }
+            },
         ).also { it.start() }
     }
 
@@ -379,7 +384,7 @@ class TelemetryController(private val context: Context) {
     private fun startRecordingNow() {
         recordingError = null
         try {
-            val dir = context.getExternalFilesDir("recordings") ?: throw IOException("Storage unavailable")
+            val dir = context.getExternalFilesDir("recordings") ?: throw IOException()
             val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
             val file = File(dir, "drive-$stamp.csv.gz")
             val out = GZIPOutputStream(FileOutputStream(file), 64 * 1024, true).bufferedWriter()
@@ -389,8 +394,8 @@ class TelemetryController(private val context: Context) {
             recordingFile = file
             recordingStart = SystemClock.elapsedRealtime()
             lastRecorderFlush = recordingStart
-        } catch (e: IOException) {
-            recordingError = e.message ?: "Could not start recording"
+        } catch (_: IOException) {
+            recordingError = context.getString(R.string.recording_error_start)
         }
     }
 
@@ -400,8 +405,8 @@ class TelemetryController(private val context: Context) {
         try {
             out.close()
             lastRecording = recordingFile
-        } catch (e: IOException) {
-            recordingError = e.message ?: "Could not finish recording"
+        } catch (_: IOException) {
+            recordingError = context.getString(R.string.recording_error_finish)
         }
         recordingFile = null
     }
@@ -417,8 +422,8 @@ class TelemetryController(private val context: Context) {
                 lastRecorderFlush = time
                 out.flush()
             }
-        } catch (e: IOException) {
-            recordingError = e.message ?: "Recording failed"
+        } catch (_: IOException) {
+            recordingError = context.getString(R.string.recording_error_write)
             stopRecordingNow()
         }
     }

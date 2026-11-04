@@ -19,8 +19,8 @@ android {
         applicationId = "app.speedg"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.2.1"
+        versionCode = 6
+        versionName = "1.3.0"
 
         val updateUrl = providers.gradleProperty("speedgUpdateUrl").getOrElse("")
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")

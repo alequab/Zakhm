@@ -10,8 +10,11 @@ data class MountCalibration(val up: Vec3, val forward: Vec3?)
 /** What a car said about itself. Cars with the same [key] are treated as the same car. */
 data class CarIdentity(val key: String, val suggestedName: String) {
     companion object {
+        const val VIN_NAME_LENGTH = 6
+
         /** Unique to one car. */
-        fun fromVin(vin: String) = CarIdentity("vin:$vin", "Car ${vin.takeLast(6)}")
+        fun fromVin(vin: String, name: String = "Car ${vin.takeLast(VIN_NAME_LENGTH)}") =
+            CarIdentity("vin:$vin", name)
 
         /** Shared by every car of that model and year, as Android Auto doesn't expose a VIN. */
         fun fromModel(make: String, model: String, year: Int?): CarIdentity {

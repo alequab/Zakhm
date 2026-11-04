@@ -2,20 +2,20 @@ package app.speedg
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothSocket
+import android.bluetooth.BluetoothDevice
+import android.content.Context
 import android.os.SystemClock
 import app.speedg.core.ObdClient
-import app.speedg.core.ObdTransport
 import java.io.IOException
-import java.util.UUID
 
 enum class ObdState { IDLE, CONNECTING, CONNECTED, CAR_NOT_RESPONDING, FAILED }
 
 /**
- * Keeps a Bluetooth link to a paired ELM327 adapter and polls the car's speed,
+ * Keeps a Bluetooth link to an ELM327 adapter and polls the car's speed,
  * reconnecting for as long as it runs. Callbacks arrive on its own thread.
  */
 class ObdConnection(
+    private val context: Context,
     private val adapter: BluetoothAdapter,
     private val address: String,
     private val onState: (ObdState) -> Unit,
@@ -23,8 +23,10 @@ class ObdConnection(
     private val onSpeed: (kmh: Int, nanos: Long) -> Unit,
     private val onVin: (String) -> Unit,
 ) {
+    private enum class LinkType { CLASSIC_SECURE, CLASSIC_INSECURE, BLE }
+
     @Volatile private var running = false
-    @Volatile private var socket: BluetoothSocket? = null
+    @Volatile private var link: ObdLink? = null
     private var thread: Thread? = null
 
     fun start() {
@@ -34,30 +36,34 @@ class ObdConnection(
 
     fun stop() {
         running = false
-        closeSocket()
+        closeLink()
         thread?.interrupt()
         thread = null
     }
 
     private fun run() {
-        // Cheap adapters often only accept one of the two connection types.
-        var insecure = false
+        // Cheap adapters often accept only one way of connecting, so keep trying each.
+        var attempt = 0
         while (running) {
             onState(ObdState.CONNECTING)
             try {
-                val connected = connect(insecure)
-                socket = connected
-                val client = ObdClient(SocketTransport(connected))
+                val device = adapter.getRemoteDevice(address)
+                val types = linkTypesFor(device)
+                val client = ObdClient(open(device, types[attempt % types.size]))
                 if (!client.initialize()) throw IOException("Adapter rejected setup")
                 client.readVin()?.let(onVin)
                 poll(client)
             } catch (_: IOException) {
-                insecure = !insecure
+                attempt++
                 if (running) onState(ObdState.FAILED)
             } catch (_: SecurityException) {
                 if (running) onState(ObdState.FAILED)
+            } catch (_: IllegalArgumentException) {
+                if (running) onState(ObdState.FAILED)
+            } catch (_: InterruptedException) {
+                return
             } finally {
-                closeSocket()
+                closeLink()
             }
             if (running) {
                 try {
@@ -67,6 +73,25 @@ class ObdConnection(
                 }
             }
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun linkTypesFor(device: BluetoothDevice) = when (device.type) {
+        BluetoothDevice.DEVICE_TYPE_LE -> listOf(LinkType.BLE)
+        BluetoothDevice.DEVICE_TYPE_CLASSIC -> listOf(LinkType.CLASSIC_SECURE, LinkType.CLASSIC_INSECURE)
+        else -> LinkType.entries.toList()
+    }
+
+    private fun open(device: BluetoothDevice, type: LinkType): ObdLink = when (type) {
+        LinkType.BLE -> BleObdLink(context, device).also {
+            link = it
+            it.open()
+        }
+        LinkType.CLASSIC_SECURE, LinkType.CLASSIC_INSECURE ->
+            ClassicObdLink(device, secure = type == LinkType.CLASSIC_SECURE).also {
+                link = it
+                it.open()
+            }
     }
 
     private fun poll(client: ObdClient) {
@@ -88,56 +113,12 @@ class ObdConnection(
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun connect(insecure: Boolean): BluetoothSocket {
-        val device = adapter.getRemoteDevice(address)
-        val created = if (insecure) {
-            device.createInsecureRfcommSocketToServiceRecord(SERIAL_PORT)
-        } else {
-            device.createRfcommSocketToServiceRecord(SERIAL_PORT)
-        }
-        socket = created
-        created.connect()
-        return created
-    }
-
-    private fun closeSocket() {
-        try {
-            socket?.close()
-        } catch (_: IOException) {
-            // Already gone.
-        }
-        socket = null
-    }
-
-    private class SocketTransport(private val socket: BluetoothSocket) : ObdTransport {
-        override fun send(command: String) {
-            socket.outputStream.write("$command\r".toByteArray(Charsets.US_ASCII))
-            socket.outputStream.flush()
-        }
-
-        override fun readResponse(): String? {
-            val input = socket.inputStream
-            val text = StringBuilder()
-            val deadline = SystemClock.elapsedRealtime() + RESPONSE_TIMEOUT_MS
-            while (SystemClock.elapsedRealtime() < deadline) {
-                if (input.available() == 0) {
-                    Thread.sleep(POLL_MS)
-                    continue
-                }
-                val c = input.read()
-                if (c < 0) return null
-                if (c.toChar() == '>') return text.toString()
-                text.append(c.toChar())
-            }
-            return null
-        }
+    private fun closeLink() {
+        link?.close()
+        link = null
     }
 
     private companion object {
-        val SERIAL_PORT: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         const val RETRY_DELAY_MS = 3000L
-        const val RESPONSE_TIMEOUT_MS = 6000L
-        const val POLL_MS = 5L
     }
 }

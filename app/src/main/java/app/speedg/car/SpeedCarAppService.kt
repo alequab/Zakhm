@@ -20,6 +20,7 @@ import androidx.car.app.validation.HostValidator
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import app.speedg.R
 import app.speedg.core.CarIdentity
 import kotlin.math.abs
 
@@ -95,16 +96,20 @@ private class SpeedCarScreen(carContext: CarContext) : Screen(carContext), Defau
 
     override fun onGetTemplate(): Template {
         val granted = hasPermission()
-        val message = when {
-            !granted -> "SpeedG needs permission to read this car's speed. Park, then allow it."
-            receiving -> "Sending car speed to your phone. Keep SpeedG open on the phone to see it."
-            else -> "Waiting for speed from this car. Not every car shares it."
-        }
-        val builder = MessageTemplate.Builder(message).setTitle("SpeedG").setHeaderAction(Action.APP_ICON)
+        val message = carContext.getString(
+            when {
+                !granted -> R.string.auto_needs_permission
+                receiving -> R.string.auto_sending
+                else -> R.string.auto_waiting
+            },
+        )
+        val builder = MessageTemplate.Builder(message)
+            .setTitle(carContext.getString(R.string.app_name))
+            .setHeaderAction(Action.APP_ICON)
         if (!granted) {
             builder.addAction(
                 Action.Builder()
-                    .setTitle("Allow")
+                    .setTitle(carContext.getString(R.string.auto_allow))
                     .setOnClickListener(ParkedOnlyOnClickListener.create { requestPermission() })
                     .build(),
             )
@@ -117,7 +122,7 @@ private class SpeedCarScreen(carContext: CarContext) : Screen(carContext), Defau
             if (CAR_SPEED_PERMISSION in granted) {
                 startListening()
             } else {
-                CarToast.makeText(carContext, "Using the phone's GPS instead", CarToast.LENGTH_LONG).show()
+                CarToast.makeText(carContext, R.string.auto_using_gps, CarToast.LENGTH_LONG).show()
             }
             invalidate()
         }

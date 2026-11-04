@@ -1,5 +1,7 @@
 package app.speedg
 
+import android.view.View
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -41,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -55,6 +58,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -63,11 +69,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.speedg.core.AvailableUpdate
 import app.speedg.core.CalibrationState
+import app.speedg.core.CarProfile
+import app.speedg.core.CarRegistry
 import app.speedg.core.SpeedInput
 import app.speedg.core.SpeedSource
 import app.speedg.core.TelemetrySnapshot
@@ -79,10 +88,16 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-enum class RotationMode(val label: String) {
-    AUTO("Auto"),
-    PORTRAIT("Portrait"),
-    LANDSCAPE("Landscape"),
+enum class RotationMode(@StringRes val label: Int) {
+    AUTO(R.string.rotation_auto),
+    PORTRAIT(R.string.rotation_portrait),
+    LANDSCAPE(R.string.rotation_landscape),
+}
+
+enum class AppLanguage(val tag: String, @StringRes val label: Int) {
+    PHONE("", R.string.language_system),
+    ARABIC("ar", R.string.language_arabic),
+    ENGLISH("en", R.string.language_english),
 }
 
 data class ObdDevice(val name: String, val address: String)
@@ -91,7 +106,10 @@ data class ScreenSettings(
     val useMph: Boolean,
     val rotation: RotationMode,
     val obdDevices: List<ObdDevice>,
+    val scanningForAdapters: Boolean,
     val needsBluetoothPermission: Boolean,
+    /** Null where the phone doesn't support choosing a language per app. */
+    val language: AppLanguage?,
 )
 
 class ScreenActions(
@@ -100,9 +118,11 @@ class ScreenActions(
     val resetPeaks: () -> Unit,
     val setUseMph: (Boolean) -> Unit,
     val setRotation: (RotationMode) -> Unit,
+    val setLanguage: (AppLanguage) -> Unit,
     val selectInput: (SpeedInput) -> Unit,
     val selectObdDevice: (String) -> Unit,
     val requestBluetooth: () -> Unit,
+    val scanForAdapters: () -> Unit,
     val selectCar: (String) -> Unit,
     val addCar: (String) -> Unit,
     val renameCar: (String, String) -> Unit,
@@ -136,6 +156,16 @@ private const val GAUGE_START_DEGREES = 135f
 private const val GAUGE_SWEEP_DEGREES = 270f
 
 private fun Modifier.panel() = background(Panel, PanelShape).border(1.dp, PanelEdge, PanelShape)
+
+/** Letter spacing for small labels. Arabic letters must stay joined, so it gets none. */
+@Composable
+private fun labelSpacing(spacing: TextUnit): TextUnit =
+    if (LocalConfiguration.current.layoutDirection == View.LAYOUT_DIRECTION_RTL) 0.sp else spacing
+
+/** The name to show for a car. The untouched default follows the app's language. */
+@Composable
+private fun carName(car: CarProfile): String =
+    if (car.name == CarRegistry.DEFAULT_NAME) stringResource(R.string.car_default_name) else car.name
 
 @Composable
 fun TelemetryScreen(
@@ -173,15 +203,15 @@ private fun UpdateBanner(update: AvailableUpdate, actions: ScreenActions) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "Update available: ${update.version}",
+            stringResource(R.string.update_available, update.version),
             Modifier.weight(1f),
             color = Accent,
             fontSize = 13.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        CompactButton("Download", { actions.downloadUpdate(update) })
-        CompactButton("Later", actions.dismissUpdate)
+        CompactButton(stringResource(R.string.update_download), { actions.downloadUpdate(update) })
+        CompactButton(stringResource(R.string.update_later), actions.dismissUpdate)
     }
 }
 
@@ -193,12 +223,12 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "SpeedG needs precise location to read speed from GPS. Your location is never saved or sent anywhere.",
+            stringResource(R.string.location_rationale, stringResource(R.string.app_name)),
             color = Primary,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRequest) { Text("Allow precise location") }
+        Button(onClick = onRequest) { Text(stringResource(R.string.location_allow)) }
     }
 }
 
@@ -218,10 +248,10 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                         Modifier.width(112.dp).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        PeakTile("ACCEL", s.peaks.accel, Modifier.weight(1f).fillMaxWidth())
-                        PeakTile("BRAKE", s.peaks.brake, Modifier.weight(1f).fillMaxWidth())
-                        PeakTile("LEFT", s.peaks.left, Modifier.weight(1f).fillMaxWidth())
-                        PeakTile("RIGHT", s.peaks.right, Modifier.weight(1f).fillMaxWidth())
+                        PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxWidth())
+                        PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxWidth())
+                        PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxWidth())
+                        PeakTile(R.string.peak_right, s.peaks.right, Modifier.weight(1f).fillMaxWidth())
                     }
                 }
             }
@@ -231,10 +261,10 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                 SpeedGauge(s, settings.useMph, Modifier.fillMaxWidth().weight(1.1f))
                 GMeter(s, Modifier.fillMaxWidth().weight(1f))
                 Row(Modifier.fillMaxWidth().height(68.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PeakTile("ACCEL", s.peaks.accel, Modifier.weight(1f).fillMaxHeight())
-                    PeakTile("BRAKE", s.peaks.brake, Modifier.weight(1f).fillMaxHeight())
-                    PeakTile("LEFT", s.peaks.left, Modifier.weight(1f).fillMaxHeight())
-                    PeakTile("RIGHT", s.peaks.right, Modifier.weight(1f).fillMaxHeight())
+                    PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxHeight())
+                    PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxHeight())
+                    PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxHeight())
+                    PeakTile(R.string.peak_right, s.peaks.right, Modifier.weight(1f).fillMaxHeight())
                 }
             }
         }
@@ -249,11 +279,12 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
 private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () -> Unit) {
     val (statusText, statusColor) = speedStatus(state, useMph)
     val s = state.snapshot
+    val settingsLabel = stringResource(R.string.settings)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            val carName = state.cars.firstOrNull { it.id == state.activeCarId }?.name
+            val activeCar = state.cars.firstOrNull { it.id == state.activeCarId }
             Text(
-                state.carNotice ?: carName.orEmpty(),
+                state.carNotice ?: activeCar?.let { carName(it) }.orEmpty(),
                 color = if (state.carNotice != null) Good else Secondary,
                 fontSize = 12.sp,
                 maxLines = 1,
@@ -277,7 +308,7 @@ private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () 
                 style = TabularDigits,
             )
         }
-        IconButton(onClick = onOpenSettings, modifier = Modifier.semantics { contentDescription = "Settings" }) {
+        IconButton(onClick = onOpenSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
             SlidersIcon()
         }
     }
@@ -295,50 +326,59 @@ private fun SlidersIcon() {
     }
 }
 
+@Composable
 private fun speedStatus(state: TelemetryUiState, useMph: Boolean): Pair<String, Color> {
     val s = state.snapshot
     val fallback = when {
         state.selectedInput == SpeedInput.PHONE || state.activeInput != SpeedInput.PHONE -> null
-        state.selectedInput == SpeedInput.ANDROID_AUTO -> "Android Auto not sending speed"
-        else -> when (state.obdState) {
-            ObdState.IDLE -> "Choose an OBD-II adapter in settings"
-            ObdState.CONNECTING -> "Connecting to OBD-II"
-            ObdState.CONNECTED -> "OBD-II connected, waiting for speed"
-            ObdState.CAR_NOT_RESPONDING -> "Car isn't answering OBD-II"
-            ObdState.FAILED -> "Can't reach the OBD-II adapter"
-        }
+        state.selectedInput == SpeedInput.ANDROID_AUTO -> stringResource(R.string.status_auto_no_speed)
+        else -> stringResource(
+            when (state.obdState) {
+                ObdState.IDLE -> R.string.status_obd_choose
+                ObdState.CONNECTING -> R.string.status_obd_connecting
+                ObdState.CONNECTED -> R.string.status_obd_waiting
+                ObdState.CAR_NOT_RESPONDING -> R.string.status_obd_no_answer
+                ObdState.FAILED -> R.string.status_obd_failed
+            },
+        )
     }
-    if (fallback != null && s.speedSource != SpeedSource.NO_SIGNAL) return "$fallback · using GPS" to Accent
+    if (fallback != null && s.speedSource != SpeedSource.NO_SIGNAL) {
+        return stringResource(R.string.status_using_gps, fallback) to Accent
+    }
     return when {
-        state.activeInput == SpeedInput.OBD -> "OBD-II · car speed" to Good
-        state.activeInput == SpeedInput.ANDROID_AUTO -> "Android Auto · car speed" to Good
-        !state.gpsEnabled -> "Turn on Location in phone settings" to Alert
-        s.speedSource == SpeedSource.ACQUIRING -> "Waiting for GPS. Needs a clear view of the sky" to Accent
-        s.speedSource == SpeedSource.NO_SIGNAL -> "No speed signal" to Alert
-        s.speedSource == SpeedSource.ESTIMATED -> "GPS lost: speed is an estimate" to Accent
+        state.activeInput == SpeedInput.OBD -> stringResource(R.string.status_obd_live) to Good
+        state.activeInput == SpeedInput.ANDROID_AUTO -> stringResource(R.string.status_auto_live) to Good
+        !state.gpsEnabled -> stringResource(R.string.status_location_off) to Alert
+        s.speedSource == SpeedSource.ACQUIRING -> stringResource(R.string.status_waiting_gps) to Accent
+        s.speedSource == SpeedSource.NO_SIGNAL -> stringResource(R.string.status_no_signal) to Alert
+        s.speedSource == SpeedSource.ESTIMATED -> stringResource(R.string.status_gps_lost) to Accent
         else -> gpsQuality(state, useMph) to Good
     }
 }
 
+@Composable
 private fun gpsQuality(state: TelemetryUiState, useMph: Boolean): String {
-    val parts = mutableListOf("GPS")
+    val parts = mutableListOf(stringResource(R.string.status_gps))
     state.snapshot.speedSigmaMps?.let {
-        parts += "±%.1f %s".format(Locale.US, it * unitFactor(useMph), unitLabel(useMph))
+        val value = "%.1f".format(Locale.US, it * unitFactor(useMph))
+        parts += stringResource(R.string.status_accuracy, value, unitLabel(useMph))
     }
-    state.satellitesUsed?.let { parts += "$it satellites" }
+    state.satellitesUsed?.let { parts += stringResource(R.string.status_satellites, it) }
     return parts.joinToString(" · ")
 }
 
-private fun calibrationHint(s: TelemetrySnapshot) = when (s.calibration) {
-    CalibrationState.WAITING_FOR_STOP -> "Stop the car to calibrate"
+@Composable
+private fun calibrationHint(s: TelemetrySnapshot): String? = when (s.calibration) {
+    CalibrationState.WAITING_FOR_STOP -> stringResource(R.string.calibrate_stop)
     CalibrationState.LEARNING_FORWARD ->
-        "Drive straight, speed up and brake gently: learning ${(s.learningProgress * 100).roundToInt()}%"
+        stringResource(R.string.calibrate_learning, (s.learningProgress * 100).roundToInt())
     CalibrationState.READY -> null
 }
 
 private fun unitFactor(useMph: Boolean) = if (useMph) 2.23694 else 3.6
 
-private fun unitLabel(useMph: Boolean) = if (useMph) "mph" else "km/h"
+@Composable
+private fun unitLabel(useMph: Boolean) = stringResource(if (useMph) R.string.unit_mph else R.string.unit_kmh)
 
 private fun formatG(value: Double?) = value?.let { "%.2f".format(Locale.US, it) } ?: "--"
 
@@ -442,7 +482,7 @@ private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize:
             style = TabularDigits,
             maxLines = 1,
         )
-        Text(unit.uppercase(Locale.US), color = Secondary, fontSize = 13.sp, letterSpacing = 2.sp)
+        Text(unit.uppercase(Locale.US), color = Secondary, fontSize = 13.sp, letterSpacing = labelSpacing(2.sp))
     }
 }
 
@@ -464,36 +504,39 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
     val dotColor = if (total >= HIGH_G) Alert else Accent
 
     Box(modifier.panel().padding(10.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.aspectRatio(1f, matchHeightConstraintsFirst = true), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize().padding(16.dp)) {
-                val radius = size.minDimension / 2
-                val center = Offset(size.width / 2, size.height / 2)
-                listOf(0.25, 0.5, 0.75, 1.0).forEach { g ->
-                    drawCircle(
-                        if (g == 1.0) Secondary.copy(alpha = 0.6f) else Track,
-                        (radius * g / METER_RANGE_G).toFloat(),
-                        center,
-                        style = Stroke(1.dp.toPx()),
-                    )
-                }
-                drawLine(Track, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), 1.dp.toPx())
-                drawLine(Track, Offset(center.x, center.y - radius), Offset(center.x, center.y + radius), 1.dp.toPx())
+        // Left and right here are the car's real directions, so they never mirror for Arabic.
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Box(Modifier.aspectRatio(1f, matchHeightConstraintsFirst = true), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize().padding(18.dp)) {
+                    val radius = size.minDimension / 2
+                    val center = Offset(size.width / 2, size.height / 2)
+                    listOf(0.25, 0.5, 0.75, 1.0).forEach { g ->
+                        drawCircle(
+                            if (g == 1.0) Secondary.copy(alpha = 0.6f) else Track,
+                            (radius * g / METER_RANGE_G).toFloat(),
+                            center,
+                            style = Stroke(1.dp.toPx()),
+                        )
+                    }
+                    drawLine(Track, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), 1.dp.toPx())
+                    drawLine(Track, Offset(center.x, center.y - radius), Offset(center.x, center.y + radius), 1.dp.toPx())
 
-                trail.forEachIndexed { i, point ->
-                    val age = (i + 1f) / trail.size
-                    drawCircle(
-                        dotColor.copy(alpha = 0.35f * age),
-                        (2.dp + 3.dp * age).toPx(),
-                        center + point * radius,
-                    )
+                    trail.forEachIndexed { i, point ->
+                        val age = (i + 1f) / trail.size
+                        drawCircle(
+                            dotColor.copy(alpha = 0.35f * age),
+                            (2.dp + 3.dp * age).toPx(),
+                            center + point * radius,
+                        )
+                    }
+                    trail.lastOrNull()?.let { drawCircle(dotColor, 8.dp.toPx(), center + it * radius) }
                 }
-                trail.lastOrNull()?.let { drawCircle(dotColor, 8.dp.toPx(), center + it * radius) }
+                MeterLabel(R.string.meter_accel, Alignment.TopCenter)
+                MeterLabel(R.string.meter_brake, Alignment.BottomCenter)
+                MeterLabel(R.string.meter_left, Alignment.CenterStart)
+                MeterLabel(R.string.meter_right, Alignment.CenterEnd)
+                if (long == null) Text(stringResource(R.string.calibrating), color = Secondary, fontSize = 13.sp)
             }
-            MeterLabel("ACCEL", Alignment.TopCenter)
-            MeterLabel("BRAKE", Alignment.BottomCenter)
-            MeterLabel("L", Alignment.CenterStart)
-            MeterLabel("R", Alignment.CenterEnd)
-            if (long == null) Text("Calibrating", color = Secondary, fontSize = 13.sp)
         }
         Column(Modifier.align(Alignment.TopStart)) {
             Text(
@@ -503,7 +546,7 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
                 fontWeight = FontWeight.Bold,
                 style = TabularDigits,
             )
-            Text("G", color = Secondary, fontSize = 12.sp, letterSpacing = 2.sp)
+            Text(stringResource(R.string.unit_g), color = Secondary, fontSize = 12.sp, letterSpacing = 2.sp)
         }
     }
 }
@@ -520,12 +563,18 @@ private fun meterPoint(lateralG: Double, longitudinalG: Double): Offset {
 }
 
 @Composable
-private fun BoxScope.MeterLabel(text: String, alignment: Alignment) {
-    Text(text, Modifier.align(alignment), color = Secondary, fontSize = 10.sp, letterSpacing = 1.sp)
+private fun BoxScope.MeterLabel(@StringRes text: Int, alignment: Alignment) {
+    Text(
+        stringResource(text),
+        Modifier.align(alignment),
+        color = Secondary,
+        fontSize = 10.sp,
+        letterSpacing = labelSpacing(1.sp),
+    )
 }
 
 @Composable
-private fun PeakTile(label: String, value: Double, modifier: Modifier) {
+private fun PeakTile(@StringRes label: Int, value: Double, modifier: Modifier) {
     Column(
         modifier.panel().padding(horizontal = 6.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.Center,
@@ -539,7 +588,7 @@ private fun PeakTile(label: String, value: Double, modifier: Modifier) {
             style = TabularDigits,
             maxLines = 1,
         )
-        Text(label, color = Secondary, fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
+        Text(stringResource(label), color = Secondary, fontSize = 10.sp, letterSpacing = labelSpacing(1.sp), maxLines = 1)
     }
 }
 
@@ -561,38 +610,56 @@ private fun SettingsSheet(
         ) {
             CarSettings(state, actions)
 
-            SectionTitle("Speed source")
+            SectionTitle(R.string.section_source)
             ChoiceRow(
-                listOf(SpeedInput.PHONE to "Phone GPS", SpeedInput.OBD to "OBD-II", SpeedInput.ANDROID_AUTO to "Android Auto"),
+                listOf(
+                    SpeedInput.PHONE to stringResource(R.string.source_phone),
+                    SpeedInput.OBD to stringResource(R.string.source_obd),
+                    SpeedInput.ANDROID_AUTO to stringResource(R.string.source_auto),
+                ),
                 state.selectedInput,
                 actions.selectInput,
             )
             when (state.selectedInput) {
-                SpeedInput.PHONE -> Hint("Speed comes from the phone's GPS and motion sensors.")
+                SpeedInput.PHONE -> Hint(stringResource(R.string.source_hint_phone))
                 SpeedInput.OBD -> ObdSettings(state, settings, actions)
-                SpeedInput.ANDROID_AUTO -> Hint(
-                    "Open SpeedG on the car screen and keep it open here too. Not every car shares its speed. " +
-                        "Android Auto must allow unknown sources in its developer settings.",
+                SpeedInput.ANDROID_AUTO -> Hint(stringResource(R.string.source_hint_auto))
+            }
+            Hint(stringResource(R.string.source_hint_general))
+
+            SectionTitle(R.string.section_units)
+            ChoiceRow(
+                listOf(false to stringResource(R.string.unit_kmh), true to stringResource(R.string.unit_mph)),
+                settings.useMph,
+                actions.setUseMph,
+            )
+
+            SectionTitle(R.string.section_screen)
+            ChoiceRow(RotationMode.entries.map { it to stringResource(it.label) }, settings.rotation, actions.setRotation)
+
+            settings.language?.let { language ->
+                SectionTitle(R.string.section_language)
+                ChoiceRow(AppLanguage.entries.map { it to stringResource(it.label) }, language, actions.setLanguage)
+            }
+
+            SectionTitle(R.string.section_tools)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactButton(stringResource(R.string.tool_calibrate), actions.calibrate, Modifier.weight(1f))
+                CompactButton(stringResource(R.string.tool_reset_peaks), actions.resetPeaks, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactButton(
+                    stringResource(if (state.recording) R.string.tool_stop_recording else R.string.tool_record),
+                    actions.toggleRecording,
+                    Modifier.weight(1f),
                 )
-            }
-            Hint("G-force always comes from the phone. If a car source stops, speed switches to GPS.")
-
-            SectionTitle("Units")
-            ChoiceRow(listOf(false to "km/h", true to "mph"), settings.useMph, actions.setUseMph)
-
-            SectionTitle("Screen")
-            ChoiceRow(RotationMode.entries.map { it to it.label }, settings.rotation, actions.setRotation)
-
-            SectionTitle("Tools")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton("Calibrate", actions.calibrate, Modifier.weight(1f))
-                CompactButton("Reset peaks", actions.resetPeaks, Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton(if (state.recording) "Stop recording" else "Record drive", actions.toggleRecording, Modifier.weight(1f))
                 val file = state.lastRecording
                 if (file != null && !state.recording) {
-                    CompactButton("Share recording", { actions.shareRecording(file) }, Modifier.weight(1f))
+                    CompactButton(
+                        stringResource(R.string.tool_share_recording),
+                        { actions.shareRecording(file) },
+                        Modifier.weight(1f),
+                    )
                 }
             }
             state.recordingError?.let { Text(it, color = Alert, fontSize = 12.sp) }
@@ -606,43 +673,46 @@ private enum class CarDialog { ADD, RENAME, DELETE }
 private fun CarSettings(state: TelemetryUiState, actions: ScreenActions) {
     var dialog by remember { mutableStateOf<CarDialog?>(null) }
     val active = state.cars.firstOrNull { it.id == state.activeCarId } ?: return
+    val activeName = carName(active)
 
-    SectionTitle("Car")
+    SectionTitle(R.string.section_car)
     state.cars.forEach { car ->
-        ChoiceChip(car.name, car.id == active.id, Modifier.fillMaxWidth()) { actions.selectCar(car.id) }
+        ChoiceChip(carName(car), car.id == active.id, Modifier.fillMaxWidth()) { actions.selectCar(car.id) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        CompactButton("Add car", { dialog = CarDialog.ADD }, Modifier.weight(1f))
-        CompactButton("Rename", { dialog = CarDialog.RENAME }, Modifier.weight(1f))
+        CompactButton(stringResource(R.string.car_add), { dialog = CarDialog.ADD }, Modifier.weight(1f))
+        CompactButton(stringResource(R.string.car_rename), { dialog = CarDialog.RENAME }, Modifier.weight(1f))
         if (state.cars.size > 1) {
-            CompactButton("Delete", { dialog = CarDialog.DELETE }, Modifier.weight(1f))
+            CompactButton(stringResource(R.string.car_delete), { dialog = CarDialog.DELETE }, Modifier.weight(1f))
         }
     }
-    Hint("Each car keeps its own speed source, calibration and peak values.")
+    Hint(stringResource(R.string.car_hint_saved))
     Hint(
-        when {
-            active.identityKey?.startsWith("vin:") == true -> "Recognized automatically by its VIN over OBD-II."
-            active.identityKey != null -> "Recognized automatically by its model over Android Auto."
-            else -> "OBD-II or Android Auto can recognize a car automatically if it shares its VIN or model."
-        },
+        stringResource(
+            when {
+                active.identityKey?.startsWith("vin:") == true -> R.string.car_hint_vin
+                active.identityKey != null -> R.string.car_hint_model
+                else -> R.string.car_hint_unknown
+            },
+        ),
     )
 
     when (dialog) {
-        CarDialog.ADD -> CarNameDialog("Add a car", "", { dialog = null }, actions.addCar)
-        CarDialog.RENAME -> CarNameDialog("Rename car", active.name, { dialog = null }) { name ->
+        CarDialog.ADD -> CarNameDialog(stringResource(R.string.car_add_title), "", { dialog = null }, actions.addCar)
+        CarDialog.RENAME -> CarNameDialog(stringResource(R.string.car_rename_title), activeName, { dialog = null }) { name ->
             actions.renameCar(active.id, name)
         }
         CarDialog.DELETE -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("Delete ${active.name}?") },
-            text = { Text("Its saved calibration and peak values will be removed.") },
+            title = { Text(stringResource(R.string.car_delete_title, activeName)) },
+            text = { Text(stringResource(R.string.car_delete_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     actions.deleteCar(active.id)
                     dialog = null
-                }) { Text("Delete", color = Alert) }
+                }) { Text(stringResource(R.string.car_delete), color = Alert) }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.cancel)) } },
         )
         null -> Unit
     }
@@ -658,7 +728,7 @@ private fun CarNameDialog(title: String, initial: String, onDismiss: () -> Unit,
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it.take(MAX_CAR_NAME_LENGTH) },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.car_name_label)) },
                 singleLine = true,
             )
         },
@@ -669,22 +739,27 @@ private fun CarNameDialog(title: String, initial: String, onDismiss: () -> Unit,
                     onConfirm(name)
                     onDismiss()
                 },
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
 @Composable
 private fun ObdSettings(state: TelemetryUiState, settings: ScreenSettings, actions: ScreenActions) {
     if (settings.needsBluetoothPermission) {
-        Hint("SpeedG needs Bluetooth permission to reach your adapter.")
-        CompactButton("Allow Bluetooth", actions.requestBluetooth, Modifier.fillMaxWidth())
+        Hint(stringResource(R.string.obd_needs_permission))
+        CompactButton(stringResource(R.string.obd_allow_bluetooth), actions.requestBluetooth, Modifier.fillMaxWidth())
         return
     }
-    Hint("Pair a Bluetooth ELM327 adapter in Android's settings, then choose it here. Bluetooth LE adapters aren't supported.")
-    if (settings.obdDevices.isEmpty()) {
-        Hint("No paired Bluetooth devices found.")
+    Hint(stringResource(R.string.obd_hint))
+    CompactButton(
+        stringResource(if (settings.scanningForAdapters) R.string.obd_scanning else R.string.obd_scan),
+        actions.scanForAdapters,
+        Modifier.fillMaxWidth(),
+    )
+    if (settings.obdDevices.isEmpty() && !settings.scanningForAdapters) {
+        Hint(stringResource(R.string.obd_none_found))
     }
     settings.obdDevices.forEach { device ->
         ChoiceChip(device.name, device.address == state.obdAddress, Modifier.fillMaxWidth()) {
@@ -694,12 +769,12 @@ private fun ObdSettings(state: TelemetryUiState, settings: ScreenSettings, actio
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+private fun SectionTitle(@StringRes text: Int) {
     Text(
-        text.uppercase(Locale.US),
+        stringResource(text).uppercase(Locale.US),
         color = Secondary,
         fontSize = 11.sp,
-        letterSpacing = 1.5.sp,
+        letterSpacing = labelSpacing(1.5.sp),
         modifier = Modifier.padding(top = 6.dp),
     )
 }
