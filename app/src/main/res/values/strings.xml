@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SpeedG</string>
+    <string name="app_name">زخم</string>
 
     <string name="update_available">Update available: %1$s</string>
     <string name="update_download">Download</string>

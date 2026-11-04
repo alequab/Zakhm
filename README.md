@@ -14,7 +14,7 @@
 
 ## العربية
 
-**زخم** تطبيق أندرويد يعرض سرعة سيارتك وقوة التسارع (G) باستخدام حساسات هاتفك، مع إمكانية قراءة السرعة من OBD-II أو Android Auto. لا يحتاج إلى حساب ولا يعرض إعلانات ولا يتطلب أجهزة إضافية. ويتوفر التطبيق بالعربية والإنجليزية، وتظهر نسخته الإنجليزية باسم SpeedG.
+**زخم** تطبيق أندرويد يعرض سرعة سيارتك وقوة التسارع (G) باستخدام حساسات هاتفك، مع إمكانية قراءة السرعة من OBD-II أو Android Auto. لا يحتاج إلى حساب ولا يعرض إعلانات ولا يتطلب أجهزة إضافية. ويتوفر التطبيق بالعربية والإنجليزية، ويُعرف أيضًا باسم SpeedG.
 
 </div>
 
@@ -115,7 +115,7 @@
 
 ## English
 
-**SpeedG**, known in Arabic as **زخم** (Zakhm, meaning "momentum"), is an Android app that shows your car's speed and G-force using your phone's sensors, with optional speed from OBD-II or Android Auto. No account, no ads and no extra hardware required. The app is available in Arabic and English.
+**زخم** (Zakhm, meaning "momentum"), also known as SpeedG, is an Android app that shows your car's speed and G-force using your phone's sensors, with optional speed from OBD-II or Android Auto. No account, no ads and no extra hardware required. The app is available in Arabic and English.
 
 <p align="center">
   <img src="docs/images/portrait.png" alt="SpeedG in portrait, waiting for a GPS signal" height="520">
