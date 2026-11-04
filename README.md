@@ -58,7 +58,7 @@
 <td valign="top"><b>حفظ السيارات</b><br>تحتفظ كل سيارة بمصدر السرعة والمعايرة وأعلى القيم الخاصة بها.</td>
 </tr>
 <tr>
-<td valign="top"><b>التعرف التلقائي</b><br>برقم الهيكل (VIN) عبر OBD-II، أو بالشركة والطراز والسنة عبر Android Auto.</td>
+<td valign="top"><b>التعرف على السيارة</b><br>برقم الهيكل (VIN) عبر OBD-II، أو بالطراز عبر Android Auto. تُحمَّل السيارة المعروفة تلقائيًا، ويسألك التطبيق قبل حفظ سيارة جديدة.</td>
 <td valign="top"><b>أي زاوية تثبيت</b><br>يحدد التطبيق بنفسه اتجاه الأسفل والأمام، ويصحح أثر المنحدرات.</td>
 </tr>
 <tr>
@@ -111,7 +111,7 @@ flowchart LR
 ### ما يجب معرفته
 
 - جرى تشغيل التطبيق على هاتف بنظام أندرويد 13، واجتازت حساباته الاختبارات على رحلات محاكاة. لكنه لم يُختبر بعد في قيادة حقيقية، لذا لم تُقَس دقته على الطريق حتى الآن.
-- لم يُختبر OBD-II إلا في المحاكاة، ولم تُجرَّب محوّلات Bluetooth LE ولا Android Auto مع جهاز أو سيارة حقيقية.
+- اتصل التطبيق بمحوّل OBD-II حقيقي يعمل بتقنية Bluetooth LE والسيارة متوقفة، لكن لم تُختبر قراءة السرعة أثناء الحركة ولا قراءة رقم الهيكل من سيارة حقيقية. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
 
 <details>
@@ -195,7 +195,7 @@ flowchart LR
 <td valign="top"><b>Saved cars</b><br>Each car keeps its own speed source, calibration and peak values.</td>
 </tr>
 <tr>
-<td valign="top"><b>Automatic recognition</b><br>By VIN over OBD-II, or by make, model and year over Android Auto.</td>
+<td valign="top"><b>Car recognition</b><br>By VIN over OBD-II, or by model over Android Auto. A known car loads automatically, and the app asks before saving a new one.</td>
 <td valign="top"><b>Any mounting angle</b><br>The app works out which way is down and forward, and corrects for hills.</td>
 </tr>
 <tr>
@@ -244,7 +244,7 @@ flowchart LR
 ### Good to know
 
 - The app has run on an Android 13 phone, and its calculations pass tests on simulated drives. It hasn't been checked on a real drive yet, so its road accuracy is still unmeasured.
-- OBD-II has only been tested in simulation, and Bluetooth LE adapters and Android Auto haven't been tried with a real device or car.
+- The app has connected to a real Bluetooth LE OBD-II adapter with the car parked, but reading speed while moving and reading a VIN from a real car haven't been tested. Classic adapters and Android Auto haven't been tried with a real device or car.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
 
 <details>

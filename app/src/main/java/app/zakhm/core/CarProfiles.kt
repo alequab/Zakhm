@@ -9,12 +9,19 @@ data class MountCalibration(val up: Vec3, val forward: Vec3?)
 
 /** What a car said about itself. Cars with the same [key] are treated as the same car. */
 data class CarIdentity(val key: String, val suggestedName: String) {
+    /** The VIN, when that's how this car identified itself. */
+    val vin: String? get() = vinOf(key)
+
     companion object {
         const val VIN_NAME_LENGTH = 6
+        private const val VIN_PREFIX = "vin:"
+
+        /** The VIN inside an identity key, if it holds one. */
+        fun vinOf(key: String?): String? = key?.takeIf { it.startsWith(VIN_PREFIX) }?.removePrefix(VIN_PREFIX)
 
         /** Unique to one car. */
         fun fromVin(vin: String, name: String = "Car ${vin.takeLast(VIN_NAME_LENGTH)}") =
-            CarIdentity("vin:$vin", name)
+            CarIdentity("$VIN_PREFIX$vin", name)
 
         /** Shared by every car of that model and year, as Android Auto doesn't expose a VIN. */
         fun fromModel(make: String, model: String, year: Int?): CarIdentity {
@@ -34,9 +41,6 @@ data class CarProfile(
     val mount: MountCalibration? = null,
     val peaks: Peaks = Peaks(),
 )
-
-/** The result of a car identifying itself. */
-data class Recognition(val car: CarProfile, val isNew: Boolean)
 
 /** The saved cars and which one is in use. There is always at least one. */
 class CarRegistry(
@@ -87,22 +91,24 @@ class CarRegistry(
         saved[i] = change(saved[i]).copy(id = activeCarId)
     }
 
-    /**
-     * Makes the car matching [identity] active. A car that was never identified
-     * takes on the identity, since it's most likely the one in use; otherwise this
-     * is a new car, which starts from the active car's speed source.
-     */
-    fun recognize(identity: CarIdentity): Recognition {
-        saved.firstOrNull { it.identityKey == identity.key }?.let {
-            activeCarId = it.id
-            return Recognition(it, isNew = false)
+    /** Makes the car saved with [identity] active. Null if no saved car has it, which is the user's call. */
+    fun selectKnown(identity: CarIdentity): CarProfile? {
+        val car = saved.firstOrNull { it.identityKey == identity.key } ?: return null
+        activeCarId = car.id
+        return car
+    }
+
+    /** Saves [identity] to the active car, replacing any it had. A name the user chose is kept. */
+    fun saveToActive(identity: CarIdentity): CarProfile {
+        updateActive {
+            it.copy(identityKey = identity.key, name = if (it.name == DEFAULT_NAME) identity.suggestedName else it.name)
         }
+        return active
+    }
+
+    /** Saves [identity] as a new car, which starts from the active car's speed source. */
+    fun saveAsNew(identity: CarIdentity): CarProfile {
         val current = active
-        if (current.identityKey == null) {
-            val name = if (current.name == DEFAULT_NAME) identity.suggestedName else current.name
-            updateActive { it.copy(identityKey = identity.key, name = name) }
-            return Recognition(active, isNew = false)
-        }
         val car = CarProfile(
             id = newId(),
             name = identity.suggestedName,
@@ -112,7 +118,7 @@ class CarRegistry(
         )
         saved += car
         activeCarId = car.id
-        return Recognition(car, isNew = true)
+        return car
     }
 
     private fun cleanName(name: String) = name.trim().ifEmpty { DEFAULT_NAME }

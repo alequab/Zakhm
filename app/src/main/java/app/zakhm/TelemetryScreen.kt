@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import app.zakhm.core.CalibrationState
+import app.zakhm.core.CarIdentity
 import app.zakhm.core.CarProfile
 import app.zakhm.core.CarRegistry
 import app.zakhm.core.SpeedInput
@@ -127,6 +128,9 @@ class ScreenActions(
     val addCar: (String) -> Unit,
     val renameCar: (String, String) -> Unit,
     val deleteCar: (String) -> Unit,
+    val saveUnknownCarToCurrent: () -> Unit,
+    val saveUnknownCarAsNew: () -> Unit,
+    val skipUnknownCar: () -> Unit,
     val toggleRecording: () -> Unit,
     val shareRecording: (File) -> Unit,
     val startUpdate: () -> Unit,
@@ -291,6 +295,46 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
     if (showSettings) {
         SettingsSheet(state, settings, actions) { showSettings = false }
     }
+    state.unknownCar?.let { UnknownCarDialog(it, state, actions) }
+}
+
+@Composable
+private fun UnknownCarDialog(identity: CarIdentity, state: TelemetryUiState, actions: ScreenActions) {
+    val current = state.cars.firstOrNull { it.id == state.activeCarId } ?: return
+    val currentName = carName(current)
+    val vin = identity.vin
+    AlertDialog(
+        onDismissRequest = actions.skipUnknownCar,
+        title = { Text(stringResource(R.string.unknown_car_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (vin != null) {
+                        stringResource(R.string.unknown_car_vin, vin)
+                    } else {
+                        stringResource(R.string.unknown_car_model, identity.suggestedName)
+                    },
+                )
+                Text(stringResource(R.string.unknown_car_question, currentName))
+                if (current.identityKey != null) {
+                    Text(stringResource(R.string.unknown_car_replaces, currentName), color = Accent)
+                }
+            }
+        },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = actions.saveUnknownCarToCurrent) {
+                    Text(stringResource(R.string.unknown_car_save_current, currentName))
+                }
+                TextButton(onClick = actions.saveUnknownCarAsNew) {
+                    Text(stringResource(R.string.unknown_car_save_new))
+                }
+                TextButton(onClick = actions.skipUnknownCar) {
+                    Text(stringResource(R.string.unknown_car_skip))
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -708,12 +752,13 @@ private fun CarSettings(state: TelemetryUiState, actions: ScreenActions) {
     Hint(
         stringResource(
             when {
-                active.identityKey?.startsWith("vin:") == true -> R.string.car_hint_vin
+                CarIdentity.vinOf(active.identityKey) != null -> R.string.car_hint_vin
                 active.identityKey != null -> R.string.car_hint_model
                 else -> R.string.car_hint_unknown
             },
         ),
     )
+    CarIdentity.vinOf(active.identityKey)?.let { Hint(stringResource(R.string.car_vin, it)) }
 
     when (dialog) {
         CarDialog.ADD -> CarNameDialog(stringResource(R.string.car_add_title), "", { dialog = null }, actions.addCar)

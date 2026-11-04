@@ -49,6 +49,8 @@ data class TelemetryUiState(
     val activeCarId: String? = null,
     /** Briefly set after the app recognizes a car by itself. */
     val carNotice: String? = null,
+    /** A car that identified itself but isn't saved, waiting for the user to decide. */
+    val unknownCar: CarIdentity? = null,
     val satellitesUsed: Int? = null,
     val gpsEnabled: Boolean = true,
     val recording: Boolean = false,
@@ -83,6 +85,11 @@ class TelemetryController(private val context: Context) {
     private lateinit var cars: CarRegistry
     private var carNotice: String? = null
     private var carNoticeUntil = 0L
+    private var unknownCar: CarIdentity? = null
+    private var unknownCarViaObd = false
+
+    /** Cars the user said "not now" to. The adapter repeats the VIN on every reconnect, so don't ask again this run. */
+    private val skippedCars = mutableSetOf<String>()
 
     private var obdAddress: String? = null
     private var obdConnection: ObdConnection? = null
@@ -311,14 +318,51 @@ class TelemetryController(private val context: Context) {
     private fun onCarIdentified(identity: CarIdentity, viaObd: Boolean) {
         captureActiveCar()
         val before = cars.active
-        val result = cars.recognize(identity)
+        if (cars.selectKnown(identity) != null) {
+            unknownCar = null
+            finishIdentifying(before, viaObd, R.string.car_notice_recognized)
+            return
+        }
+        if (identity.key !in skippedCars) {
+            unknownCar = identity
+            unknownCarViaObd = viaObd
+        }
+        publish()
+    }
+
+    /** Saves the car that's waiting to the car in use. */
+    fun saveUnknownCarToCurrent() = handler.post {
+        val identity = unknownCar ?: return@post
+        captureActiveCar()
+        val before = cars.active
+        unknownCar = null
+        cars.saveToActive(identity)
+        finishIdentifying(before, unknownCarViaObd, R.string.car_notice_saved)
+    }
+
+    /** Saves the car that's waiting as a new car and switches to it. */
+    fun saveUnknownCarAsNew() = handler.post {
+        val identity = unknownCar ?: return@post
+        captureActiveCar()
+        val before = cars.active
+        unknownCar = null
+        cars.saveAsNew(identity)
+        finishIdentifying(before, unknownCarViaObd, R.string.car_notice_new)
+    }
+
+    fun skipUnknownCar() = handler.post {
+        unknownCar?.let { skippedCars += it.key }
+        unknownCar = null
+        publish()
+    }
+
+    private fun finishIdentifying(before: CarProfile, viaObd: Boolean, noticeText: Int) {
         // The car answered over this adapter, so that's how to reach it from now on.
         if (viaObd) cars.updateActive { it.copy(input = SpeedInput.OBD, obdAddress = obdAddress) }
         val car = cars.active
         if (car.id != before.id) applyActiveCar() else applyActiveSource()
         if (car.id != before.id || car.identityKey != before.identityKey) {
-            val notice = if (result.isNew) R.string.car_notice_new else R.string.car_notice_recognized
-            carNotice = context.getString(notice, car.name)
+            carNotice = context.getString(noticeText, car.name)
             carNoticeUntil = SystemClock.elapsedRealtime() + CAR_NOTICE_MS
         }
         saveCars()
@@ -372,6 +416,7 @@ class TelemetryController(private val context: Context) {
             cars = cars.cars,
             activeCarId = cars.active.id,
             carNotice = carNotice.takeIf { SystemClock.elapsedRealtime() < carNoticeUntil },
+            unknownCar = unknownCar,
             satellitesUsed = satellitesUsed,
             gpsEnabled = gpsEnabled,
             recording = recorder != null,

@@ -76,6 +76,16 @@
     <string name="car_hint_unknown">يمكن لـ OBD-II أو Android Auto التعرف على السيارة تلقائيًا إذا كانت تشارك رقم هيكلها أو طرازها.</string>
     <string name="car_notice_new">حُفظت سيارة جديدة: %1$s</string>
     <string name="car_notice_recognized">تم التعرف على: %1$s</string>
+    <string name="car_notice_saved">حُفظ في %1$s</string>
+    <string name="car_vin">رقم الهيكل: %1$s</string>
+    <string name="unknown_car_title">تم العثور على سيارة جديدة</string>
+    <string name="unknown_car_vin">رقم هيكل هذه السيارة هو %1$s.</string>
+    <string name="unknown_car_model">هذه السيارة هي %1$s.</string>
+    <string name="unknown_car_question">هل تريد حفظها في %1$s ليتعرف عليها التطبيق في المرة القادمة؟</string>
+    <string name="unknown_car_replaces">يوجد في %1$s سيارة أخرى محفوظة. سيؤدي الحفظ هنا إلى استبدالها.</string>
+    <string name="unknown_car_save_current">حفظ في %1$s</string>
+    <string name="unknown_car_save_new">حفظ كسيارة جديدة</string>
+    <string name="unknown_car_skip">ليس الآن</string>
 
     <string name="source_phone">GPS الهاتف</string>
     <string name="source_obd">OBD-II</string>

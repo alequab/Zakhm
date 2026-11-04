@@ -79,39 +79,64 @@ class CarProfilesTest {
     }
 
     @Test
-    fun firstIdentificationNamesTheCarInUse() {
+    fun unknownVinChangesNothingUntilTheUserDecides() {
         val cars = registry()
+        cars.rename(cars.active.id, "picanto")
+        val before = cars.active
+        assertNull(cars.selectKnown(CarIdentity.fromVin(vin)))
+        assertEquals(before, cars.active)
+        assertEquals(1, cars.cars.size)
+    }
+
+    @Test
+    fun savingToTheCurrentCarKeepsItsChosenName() {
+        val cars = registry()
+        cars.rename(cars.active.id, "picanto")
         val id = cars.active.id
-        val result = cars.recognize(CarIdentity.fromVin(vin))
-        assertFalse(result.isNew)
-        assertEquals(id, result.car.id)
-        assertEquals("Car 004352", result.car.name)
+        val saved = cars.saveToActive(CarIdentity.fromVin(vin))
+        assertEquals(id, saved.id)
+        assertEquals("picanto", saved.name)
+        assertEquals(vin, CarIdentity.vinOf(saved.identityKey))
+        assertEquals(1, cars.cars.size)
     }
 
     @Test
-    fun firstIdentificationKeepsAChosenName() {
+    fun savingToAnUntouchedDefaultCarNamesIt() {
         val cars = registry()
-        cars.rename(cars.active.id, "Daily driver")
-        assertEquals("Daily driver", cars.recognize(CarIdentity.fromVin(vin)).car.name)
+        assertEquals("Car 004352", cars.saveToActive(CarIdentity.fromVin(vin)).name)
     }
 
     @Test
-    fun unknownCarIsAddedAndKnownCarIsLoaded() {
+    fun savingToTheCurrentCarReplacesItsOldVin() {
+        val cars = registry()
+        cars.saveToActive(CarIdentity.fromVin(vin))
+        val other = "2T1BURHE0JC123456"
+        assertEquals(other, CarIdentity.vinOf(cars.saveToActive(CarIdentity.fromVin(other)).identityKey))
+        assertNull("the old VIN no longer belongs to any car", cars.selectKnown(CarIdentity.fromVin(vin)))
+    }
+
+    @Test
+    fun savingAsNewAddsACarAndKnownCarLoadsByItself() {
         val cars = registry()
         cars.updateActive { it.copy(input = SpeedInput.OBD, obdAddress = "AA:BB") }
-        val first = cars.recognize(CarIdentity.fromVin(vin)).car
+        val first = cars.saveToActive(CarIdentity.fromVin(vin))
 
-        val other = cars.recognize(CarIdentity.fromVin("2T1BURHE0JC123456"))
-        assertTrue(other.isNew)
-        assertNotEquals(first.id, other.car.id)
-        assertEquals("keeps using the same adapter", "AA:BB", other.car.obdAddress)
-        assertEquals(SpeedInput.OBD, other.car.input)
+        val other = cars.saveAsNew(CarIdentity.fromVin("2T1BURHE0JC123456"))
+        assertNotEquals(first.id, other.id)
+        assertEquals(other.id, cars.active.id)
+        assertEquals("keeps using the same adapter", "AA:BB", other.obdAddress)
+        assertEquals(SpeedInput.OBD, other.input)
 
-        val back = cars.recognize(CarIdentity.fromVin(vin))
-        assertFalse(back.isNew)
-        assertEquals(first.id, back.car.id)
+        assertEquals(first.id, cars.selectKnown(CarIdentity.fromVin(vin))!!.id)
         assertEquals(first.id, cars.active.id)
         assertEquals(2, cars.cars.size)
+    }
+
+    @Test
+    fun onlyVinIdentitiesHaveAVin() {
+        assertEquals(vin, CarIdentity.fromVin(vin).vin)
+        assertNull(CarIdentity.fromModel("Kia", "Picanto", 2017).vin)
+        assertNull(CarIdentity.vinOf(null))
     }
 
     @Test

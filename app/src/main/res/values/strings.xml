@@ -76,6 +76,16 @@
     <string name="car_hint_unknown">OBD-II or Android Auto can recognize a car automatically if it shares its VIN or model.</string>
     <string name="car_notice_new">New car saved: %1$s</string>
     <string name="car_notice_recognized">Recognized: %1$s</string>
+    <string name="car_notice_saved">Saved to %1$s</string>
+    <string name="car_vin">VIN: %1$s</string>
+    <string name="unknown_car_title">New car found</string>
+    <string name="unknown_car_vin">This car\'s VIN is %1$s.</string>
+    <string name="unknown_car_model">This car is a %1$s.</string>
+    <string name="unknown_car_question">Save it to %1$s, so the app recognizes this car next time?</string>
+    <string name="unknown_car_replaces">%1$s already has a different car saved. Saving here replaces it.</string>
+    <string name="unknown_car_save_current">Save to %1$s</string>
+    <string name="unknown_car_save_new">Save as a new car</string>
+    <string name="unknown_car_skip">Not now</string>
 
     <string name="source_phone">Phone GPS</string>
     <string name="source_obd">OBD-II</string>
