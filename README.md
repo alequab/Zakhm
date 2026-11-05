@@ -116,9 +116,10 @@ flowchart LR
 
 ### ما يجب معرفته
 
-- جرى تشغيل التطبيق على هاتف بنظام أندرويد 13 وفي رحلة قصيرة حقيقية، واجتازت حساباته الاختبارات على رحلات محاكاة. لكن لم تُقَس دقته على الطريق حتى الآن.
-- في تلك الرحلة، قرأ التطبيق السرعة ورقم الهيكل من سيارة حقيقية عبر محوّل OBD-II يعمل بتقنية Bluetooth LE. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
-- لم تُختبر ملاحظة تحريك الهاتف إلا على رحلات محاكاة حتى الآن.
+- جرى تشغيل التطبيق على هاتف بنظام أندرويد 13 وفي رحلات حقيقية قليلة، واجتازت حساباته الاختبارات على رحلات محاكاة. لكن لم تُقارَن دقته بعد بجهاز قياس مرجعي.
+- في رحلة قصيرة، قرأ التطبيق السرعة ورقم الهيكل من سيارة حقيقية عبر محوّل OBD-II يعمل بتقنية Bluetooth LE. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
+- في رحلة حقيقية مدتها نحو 80 دقيقة، لاحظ التطبيق تحريك الهاتف في المرات التي فُحصت، وكانت قوة G الأمامية قريبة مما تدل عليه تغيرات سرعة GPS.
+- قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
 
 <details>
@@ -257,9 +258,10 @@ flowchart LR
 
 ### Good to know
 
-- The app has run on an Android 13 phone and on one short real drive, and its calculations pass tests on simulated drives. Its road accuracy is still unmeasured.
-- On that drive, the app read speed and the VIN from a real car through a Bluetooth LE OBD-II adapter. Classic adapters and Android Auto haven't been tried with a real device or car.
-- Noticing a moved phone has only been tested on simulated drives so far.
+- The app has run on an Android 13 phone and on a few real drives, and its calculations pass tests on simulated drives. Its accuracy hasn't been compared with a reference instrument yet.
+- On a short drive, the app read speed and the VIN from a real car through a Bluetooth LE OBD-II adapter. Classic adapters and Android Auto haven't been tried with a real device or car.
+- On a real drive of about 80 minutes, the app noticed the moved phone in the cases checked, and forward G closely followed what GPS speed changes showed.
+- GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
 
 <details>

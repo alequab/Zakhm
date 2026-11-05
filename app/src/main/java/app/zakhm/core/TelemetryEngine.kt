@@ -397,16 +397,16 @@ class TelemetryEngine {
      * the only lasting force is gravity, so averaging a few intervals gives its direction.
      */
     private fun learnUpWhileCruising(w: WindowStats, speedChangeRate: Double, averageSpeed: Double) {
+        // Roads rarely stay straight and level for long, so an unsteady moment is skipped, not a reason to start over.
         val steady = averageSpeed >= MIN_LEARNING_SPEED &&
-            abs(speedChangeRate) < CRUISING_BROKEN_RATE &&
+            abs(speedChangeRate) < MAX_CRUISING_RATE &&
             (w.meanGyro - gyroBias).norm < MAX_CRUISING_TURN
-        if (!steady) {
+        if (!steady) return
+        // The steady moments can be far apart, so make sure the phone hasn't moved in between.
+        if (cruisingSamples > 0 && angleBetween(cruisingForce.normalized(), w.meanForce.normalized()) > MAX_CRUISING_SPREAD_RADIANS) {
             cruisingForce = Vec3.ZERO
             cruisingSamples = 0
-            return
         }
-        // GPS speed noise alone can look like this, so it only skips the interval instead of starting over.
-        if (abs(speedChangeRate) >= MAX_CRUISING_RATE) return
         cruisingForce += w.meanForce
         cruisingSamples++
         if (cruisingSamples >= CRUISING_SAMPLES_NEEDED) {
@@ -503,8 +503,8 @@ class TelemetryEngine {
         const val MAX_LEARNING_YAW_RATE = 0.06
         const val MIN_LEARNING_TURN = 0.5
         const val MAX_CRUISING_RATE = 0.2
-        const val CRUISING_BROKEN_RATE = 0.6
         const val MAX_CRUISING_TURN = 0.03
+        const val MAX_CRUISING_SPREAD_RADIANS = 15.0 * Math.PI / 180.0
         const val CRUISING_SAMPLES_NEEDED = 5
         const val MAX_GRAVITY_ERROR = 1.0
         const val GRAVITY_CORRECTION_SECONDS = 8.0
