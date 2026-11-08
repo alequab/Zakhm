@@ -54,23 +54,38 @@ class StillnessModel(stats: StillnessStats = StillnessStats()) {
         stats = stats.copy(rollingForce = stats.rollingForce.add(ln(forceStd)), rollingGyro = stats.rollingGyro.add(ln(gyroStd)))
     }
 
-    /** Enough of both, and far enough apart, to be trusted. */
-    val ready: Boolean
-        get() = stats.parkedForce.count >= MIN_SAMPLES && stats.rollingForce.count >= MIN_SAMPLES &&
-            (separation(stats.parkedForce, stats.rollingForce) >= MIN_SEPARATION ||
-                separation(stats.parkedGyro, stats.rollingGyro) >= MIN_SEPARATION)
+    /**
+     * A measure is used when a typical parked moment is quieter than the car ever is
+     * while rolling. Rolling moments are judged from a trusted speed and come out
+     * consistent; parked ones also catch a phone being fiddled with at a stop, so
+     * they're only used to check that this line actually separates the two.
+     */
+    private fun separates(parked: RunningStats, rolling: RunningStats) =
+        parked.count >= MIN_SAMPLES && rolling.count >= MIN_SAMPLES && parked.mean < rollingFloor(rolling)
 
-    /** Parked only if every well-separated measure says so; rolling if any of them does. */
+    private fun rollingFloor(rolling: RunningStats) = rolling.mean - FLOOR_SIGMAS * max(rolling.std, MIN_STD)
+
+    private val forceSeparates get() = separates(stats.parkedForce, stats.rollingForce)
+    private val gyroSeparates get() = separates(stats.parkedGyro, stats.rollingGyro)
+
+    /** Enough of both, and at least one measure that tells them apart. */
+    val ready: Boolean get() = forceSeparates || gyroSeparates
+
+    /**
+     * Parked when every measure that separates says the car is quieter than it ever
+     * rolls. Rolling when the car shakes about as much as it usually does rolling.
+     */
     fun classify(forceStd: Double, gyroStd: Double): Stillness {
         if (!ready || !usable(forceStd, gyroStd)) return Stillness.UNKNOWN
-        val votes = listOf(
-            vote(ln(forceStd), stats.parkedForce, stats.rollingForce),
-            vote(ln(gyroStd), stats.parkedGyro, stats.rollingGyro),
-        ).filter { it != null }
+        val force = ln(forceStd)
+        val gyro = ln(gyroStd)
+        val measures = listOfNotNull(
+            if (forceSeparates) force to stats.rollingForce else null,
+            if (gyroSeparates) gyro to stats.rollingGyro else null,
+        )
         return when {
-            votes.isEmpty() -> Stillness.UNKNOWN
-            votes.any { it == Stillness.ROLLING } -> Stillness.ROLLING
-            votes.all { it == Stillness.PARKED } -> Stillness.PARKED
+            measures.all { (x, rolling) -> x < rollingFloor(rolling) } -> Stillness.PARKED
+            measures.any { (x, rolling) -> x >= rolling.mean - ROLLING_SIGMAS * max(rolling.std, MIN_STD) } -> Stillness.ROLLING
             else -> Stillness.UNKNOWN
         }
     }
@@ -80,37 +95,20 @@ class StillnessModel(stats: StillnessStats = StillnessStats()) {
         val s = stats
         // Typical values back in ordinary units, with the spread as a factor.
         fun typical(r: RunningStats) = "%.4f×%.1f".format(java.util.Locale.US, kotlin.math.exp(r.mean), kotlin.math.exp(r.std))
-        return "parked=%d rolling=%d sepF=%.1f sepG=%.1f ready=%s force=%s/%s gyro=%s/%s".format(
+        return "parked=%d rolling=%d ready=%s force=%s/%s floor=%.4f%s gyro=%s/%s floor=%.4f%s".format(
             java.util.Locale.US,
             s.parkedForce.count.toInt(),
             s.rollingForce.count.toInt(),
-            separation(s.parkedForce, s.rollingForce),
-            separation(s.parkedGyro, s.rollingGyro),
             ready,
             typical(s.parkedForce),
             typical(s.rollingForce),
+            kotlin.math.exp(rollingFloor(s.rollingForce)),
+            if (forceSeparates) "(used)" else "",
             typical(s.parkedGyro),
             typical(s.rollingGyro),
+            kotlin.math.exp(rollingFloor(s.rollingGyro)),
+            if (gyroSeparates) "(used)" else "",
         )
-    }
-
-    /** Null when this measure doesn't separate the two well enough to have a say. */
-    private fun vote(x: Double, parked: RunningStats, rolling: RunningStats): Stillness? {
-        if (separation(parked, rolling) < MIN_SEPARATION) return null
-        // Each side has to be clearly nearer its own class, leaving a gap where neither is claimed.
-        val toParked = (x - parked.mean) / max(parked.std, MIN_STD)
-        val toRolling = (rolling.mean - x) / max(rolling.std, MIN_STD)
-        return when {
-            toParked <= PARKED_LIMIT_SIGMAS && toRolling >= CLEAR_SIGMAS -> Stillness.PARKED
-            toRolling <= ROLLING_LIMIT_SIGMAS && toParked >= CLEAR_SIGMAS -> Stillness.ROLLING
-            else -> Stillness.UNKNOWN
-        }
-    }
-
-    private fun separation(a: RunningStats, b: RunningStats): Double {
-        if (a.count < 2 || b.count < 2) return 0.0
-        val spread = sqrt((max(a.variance, MIN_STD * MIN_STD) + max(b.variance, MIN_STD * MIN_STD)) / 2)
-        return (b.mean - a.mean) / spread
     }
 
     private fun usable(forceStd: Double, gyroStd: Double) =
@@ -118,11 +116,15 @@ class StillnessModel(stats: StillnessStats = StillnessStats()) {
 
     private companion object {
         const val MIN_SAMPLES = 20.0
-        /** Parked and rolling must be at least this many spreads apart before the model is used. */
-        const val MIN_SEPARATION = 4.0
         const val MIN_STD = 0.1
-        const val PARKED_LIMIT_SIGMAS = 2.0
-        const val ROLLING_LIMIT_SIGMAS = 2.0
-        const val CLEAR_SIGMAS = 2.0
+
+        /**
+         * How far below its typical rolling shake counts as quieter than the car ever rolls.
+         * A rolling moment drops this low well under 1% of the time, and parked has to last too.
+         */
+        const val FLOOR_SIGMAS = 2.5
+
+        /** Within this of its typical rolling shake counts as rolling. */
+        const val ROLLING_SIGMAS = 1.0
     }
 }

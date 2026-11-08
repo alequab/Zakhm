@@ -144,6 +144,31 @@ class LearningTest {
         assertFalse("GPS should still decide when vibration can't tell", engine.snapshot().stopped)
     }
 
+    /** Typical value and spread factor, as the debug log shows them, back into saved form. */
+    private fun stats(typical: Double, spread: Double) =
+        RunningStats(401.0, kotlin.math.ln(typical), 401.0 * kotlin.math.ln(spread).let { it * it })
+
+    @Test
+    fun theRealPicantoNumbersTellAStillStopFromRolling() {
+        // Learned on a real 15-minute drive: parked moments vary a lot, rolling ones don't.
+        val model = StillnessModel(
+            StillnessStats(
+                parkedForce = stats(0.0896, 3.4),
+                parkedGyro = stats(0.0045, 4.8),
+                rollingForce = stats(0.432, 1.8),
+                rollingGyro = stats(0.0308, 2.2),
+            ),
+        )
+        assertTrue(model.describe(), model.ready)
+        // Measured standing still at a stop on an earlier drive.
+        assertEquals(Stillness.PARKED, model.classify(0.04, 0.001))
+        // Measured rolling at walking pace.
+        assertEquals(Stillness.ROLLING, model.classify(0.26, 0.005))
+        assertEquals(Stillness.ROLLING, model.classify(0.43, 0.03))
+        // In between, neither is claimed and GPS decides.
+        assertEquals(Stillness.UNKNOWN, model.classify(0.15, 0.003))
+    }
+
     @Test
     fun whatWasLearnedIsSavedWithTheCar() {
         val learned = LearnedCar(

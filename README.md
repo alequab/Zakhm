@@ -128,7 +128,7 @@ flowchart LR
 - في رحلة قصيرة، قرأ التطبيق السرعة ورقم الهيكل من سيارة حقيقية عبر محوّل OBD-II يعمل بتقنية Bluetooth LE. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
 - في رحلة حقيقية مدتها نحو 80 دقيقة، لاحظ التطبيق تحريك الهاتف في المرات التي فُحصت، وكانت قوة G الأمامية قريبة مما تدل عليه تغيرات سرعة GPS.
 - في رحلة قصيرة مع محوّل OBD-II، وصلت سرعة السيارة نحو 6 مرات في الثانية. وكان فرق سرعة GPS عن سرعة السيارة 1.6 كم/س في المتوسط، لكنه بلغ 10.8 كم/س والسيارة واقفة.
-- قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف. ويستعمل التطبيق اهتزاز السيارة لتصحيح ذلك فقط بعد أن يتعلّم الفرق بوضوح، ولم يحدث ذلك بعد في السيارة التي جُرّب عليها.
+- قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف. ويستعمل التطبيق اهتزاز السيارة لتصحيح ذلك بعد أن يتعلّم الفرق بوضوح. وفي رحلة مدتها 16 دقيقة، لم يعدّ السيارة واقفة وهي تسير ولا مرة.
 - يحاول التطبيق أيضًا سماع سرعة العجلات التي تبثها بعض السيارات من تلقاء نفسها، ولا يستخدمها إلا بعد مطابقتها لسرعة السيارة. ولم تُسمع في السيارة التي جُرّب عليها.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
 
@@ -282,7 +282,7 @@ flowchart LR
 - On a short drive, the app read speed and the VIN from a real car through a Bluetooth LE OBD-II adapter. Classic adapters and Android Auto haven't been tried with a real device or car.
 - On a real drive of about 80 minutes, the app noticed the moved phone in the cases checked, and forward G closely followed what GPS speed changes showed.
 - On a short drive with an OBD-II adapter, car speed arrived about 6 times a second. GPS speed was 1.6 km/h off the car's on average, but up to 10.8 km/h while parked.
-- GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop. The app uses the car's vibration to correct this only once it has clearly learned the difference, which hasn't happened yet on the car it was tried on.
+- GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop. The app uses the car's vibration to correct this once it has clearly learned the difference. On a 16-minute drive, it never took the moving car for parked.
 - The app also listens for the wheel speeds some cars broadcast by themselves, and only uses them after they match the car's speed. They weren't heard on the car it was tried on.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
 

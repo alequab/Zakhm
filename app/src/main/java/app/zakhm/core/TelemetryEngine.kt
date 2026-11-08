@@ -131,6 +131,7 @@ class TelemetryEngine {
     private var carScale = SpeedScale()
     private var lastCarFix = Double.NEGATIVE_INFINITY
     private var lastStillnessLearned = Double.NEGATIVE_INFINITY
+    private var parkedSince = Double.NaN
 
     /** The latest GPS reading next to the car's speed at the same moment, for the log. */
     var lastGpsCheck: GpsCheck? = null
@@ -441,6 +442,9 @@ class TelemetryEngine {
         val gpsFresh = fix != null && time - fix.time <= GPS_FRESH_SECONDS
         val still = stillnessModel.classify(w.forceStd, w.gyroStd)
         lastStillness = still
+        if (still != Stillness.PARKED) parkedSince = Double.NaN else if (parkedSince.isNaN()) parkedSince = time
+        // A smooth moment while rolling can look parked briefly; a parked car stays that way.
+        val parkedForAWhile = !parkedSince.isNaN() && time - parkedSince >= PARKED_HOLD_SECONDS
         if (gpsFresh) learnStillness(time, w, fix!!)
         val fromGps = fix?.source != FixSource.CAR
 
@@ -448,7 +452,7 @@ class TelemetryEngine {
         // available. The exception: a small GPS speed while this car's learned vibration says
         // parked, as receivers report several km/h standing still.
         if (gpsFresh && fix!!.speed!! > GPS_STOPPED_SPEED) {
-            val gpsDrift = fromGps && still == Stillness.PARKED && fix.speed!! <= MAX_PARKED_GPS_SPEED
+            val gpsDrift = fromGps && parkedForAWhile && fix.speed!! <= MAX_PARKED_GPS_SPEED
             if (!gpsDrift) {
                 stopped = false
                 return
@@ -724,6 +728,7 @@ class TelemetryEngine {
         /** About 14 km/h. Faster than any GPS drift seen while parked, so it's always believed. */
         const val MAX_PARKED_GPS_SPEED = 4.0
         const val CAR_FRESH_SECONDS = 2.0
+        const val PARKED_HOLD_SECONDS = 2.0
         const val STILLNESS_LEARN_SECONDS = 0.5
         val CAR_ROLLING_LEARN_RANGE = 1.0..5.5
         const val GPS_PARKED_LEARN_SPEED = 0.2

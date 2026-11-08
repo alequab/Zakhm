@@ -113,6 +113,7 @@ class ObdConnection(
     private var lastRequested: Double? = null
     private var surveyed = false
     private var misses = 0
+    private var lastAnswer = 0L
 
     private fun poll(client: ObdClient) {
         reported = null
@@ -147,14 +148,17 @@ class ObdConnection(
             val kmh = client.readSpeedKmh()
             val after = SystemClock.elapsedRealtimeNanos()
             if (kmh == null) {
-                // One missed reply is normal; several in a row mean the car isn't answering, as with the ignition off.
-                if (++misses >= MISSES_BEFORE_PAUSE) {
+                // Right after connecting, a car can miss several replies in a row while still answering
+                // most. Only a car that has gone quiet for a while, as with the ignition off, is waited on.
+                val quiet = SystemClock.elapsedRealtime() - lastAnswer > QUIET_BEFORE_PAUSE_MS
+                if (++misses >= MISSES_BEFORE_PAUSE && quiet) {
                     report(ObdState.CAR_NOT_RESPONDING)
                     Thread.sleep(RETRY_DELAY_MS)
                 }
                 continue
             }
             misses = 0
+            lastAnswer = SystemClock.elapsedRealtime()
             report(ObdState.CONNECTED)
             last = kmh.toDouble()
             val reading = ObdReading(ObdReading.Kind.REQUEST, (after - before) / 1_000_000, client.usingReplyCount)
@@ -252,6 +256,9 @@ class ObdConnection(
         const val MAX_MISMATCHES = 2
         const val MAX_SILENT_LISTENS = 3
         const val MISSES_BEFORE_PAUSE = 3
+
+        /** In the first minutes of a real drive, the car missed up to a third of replies while answering the rest. */
+        const val QUIET_BEFORE_PAUSE_MS = 5_000L
         const val SURVEY_MS = 2_000L
     }
 }
