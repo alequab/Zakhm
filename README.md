@@ -73,6 +73,14 @@
 <td valign="top"><b>مظهر لكل سيارة</b><br>ثمانية ألوان جاهزة أو ألوانك الخاصة، ويتغيّر المظهر مع تغيّر السيارة وتبقى الأرقام واضحة.</td>
 <td valign="top"><b>ملاحظة تحريك الهاتف</b><br>إذا تحرّك الهاتف أثناء القيادة، يلاحظ التطبيق ذلك ويعيد المعايرة بدل عرض قراءات خاطئة.</td>
 </tr>
+<tr>
+<td valign="top"><b>الهاتف في اليد</b><br>عندما تمسك الهاتف، تتوقف قراءة قوة G وأعلى القيم خلال أقل من ثانية، ثم تعود بعد أن تعيده إلى الحامل.</td>
+<td valign="top"><b>يتعلّم كل سيارة</b><br>يقيس تأخر سرعة OBD-II وGPS، ومقدار خطأ عداد السرعة، واهتزاز السيارة واقفة وسائرة، ويحفظ ذلك لكل سيارة.</td>
+</tr>
+<tr>
+<td valign="top"><b>OBD-II أسرع</b><br>طلبات أسرع واتصال Bluetooth LE بأولوية عالية، فتصل قراءات السرعة عدة مرات في الثانية.</td>
+<td valign="top"><b>قطع اتصال OBD-II</b><br>زر في الإعدادات يحرر المحوّل لتطبيق آخر، ثم يعيد الاتصال متى شئت.</td>
+</tr>
 </table>
 
 ### البدء السريع
@@ -119,7 +127,9 @@ flowchart LR
 - جرى تشغيل التطبيق على هاتف بنظام أندرويد 13 وفي رحلات حقيقية قليلة، واجتازت حساباته الاختبارات على رحلات محاكاة. لكن لم تُقارَن دقته بعد بجهاز قياس مرجعي.
 - في رحلة قصيرة، قرأ التطبيق السرعة ورقم الهيكل من سيارة حقيقية عبر محوّل OBD-II يعمل بتقنية Bluetooth LE. ولم تُجرَّب المحوّلات الكلاسيكية ولا Android Auto مع جهاز أو سيارة حقيقية.
 - في رحلة حقيقية مدتها نحو 80 دقيقة، لاحظ التطبيق تحريك الهاتف في المرات التي فُحصت، وكانت قوة G الأمامية قريبة مما تدل عليه تغيرات سرعة GPS.
-- قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف.
+- في رحلة قصيرة مع محوّل OBD-II، وصلت سرعة السيارة نحو 6 مرات في الثانية. وكان فرق سرعة GPS عن سرعة السيارة 1.6 كم/س في المتوسط، لكنه بلغ 10.8 كم/س والسيارة واقفة.
+- قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف. ويستعمل التطبيق اهتزاز السيارة لتصحيح ذلك فقط بعد أن يتعلّم الفرق بوضوح، ولم يحدث ذلك بعد في السيارة التي جُرّب عليها.
+- يحاول التطبيق أيضًا سماع سرعة العجلات التي تبثها بعض السيارات من تلقاء نفسها، ولا يستخدمها إلا بعد مطابقتها لسرعة السيارة. ولم تُسمع في السيارة التي جُرّب عليها.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
 
 <details>
@@ -162,6 +172,8 @@ flowchart LR
 | `core/CarProfiles.kt` | السيارات المحفوظة والتعرف عليها |
 | `core/CarTheme.kt` | ألوان المظهر والحفاظ على وضوحها |
 | `core/Obd.kt` | بروتوكول OBD-II ورقم الهيكل |
+| `core/SourceTiming.kt` | تأخر كل مصدر سرعة وخطأ عداد السرعة |
+| `core/StillnessModel.kt` | اهتزاز السيارة واقفة وسائرة |
 | `ObdLinks.kt` | الاتصال بالمحوّل بالبلوتوث الكلاسيكي وBluetooth LE |
 | `car/SpeedCarAppService.kt` | شاشة Android Auto |
 | `TelemetryScreen.kt` | شاشات التطبيق |
@@ -219,6 +231,14 @@ flowchart LR
 <td valign="top"><b>A theme for each car</b><br>Eight ready-made colours or your own. The theme switches with the car, and the numbers stay clear.</td>
 <td valign="top"><b>Notices a moved phone</b><br>If the phone moves during a drive, the app notices and calibrates again instead of showing wrong readings.</td>
 </tr>
+<tr>
+<td valign="top"><b>Phone in hand</b><br>When you hold the phone, G-force and peaks pause within a second, and come back once it's in the mount again.</td>
+<td valign="top"><b>Learns each car</b><br>Measures how late OBD-II and GPS speeds are, how far off the speedometer reads, and how the car shakes parked and rolling, and keeps it per car.</td>
+</tr>
+<tr>
+<td valign="top"><b>Faster OBD-II</b><br>Quicker requests and a high-priority Bluetooth LE link, so car speed arrives several times a second.</td>
+<td valign="top"><b>Disconnect OBD-II</b><br>A settings button frees the adapter for another app, then connects again when you want.</td>
+</tr>
 </table>
 
 ### Quick start
@@ -261,7 +281,9 @@ flowchart LR
 - The app has run on an Android 13 phone and on a few real drives, and its calculations pass tests on simulated drives. Its accuracy hasn't been compared with a reference instrument yet.
 - On a short drive, the app read speed and the VIN from a real car through a Bluetooth LE OBD-II adapter. Classic adapters and Android Auto haven't been tried with a real device or car.
 - On a real drive of about 80 minutes, the app noticed the moved phone in the cases checked, and forward G closely followed what GPS speed changes showed.
-- GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop.
+- On a short drive with an OBD-II adapter, car speed arrived about 6 times a second. GPS speed was 1.6 km/h off the car's on average, but up to 10.8 km/h while parked.
+- GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop. The app uses the car's vibration to correct this only once it has clearly learned the difference, which hasn't happened yet on the car it was tried on.
+- The app also listens for the wheel speeds some cars broadcast by themselves, and only uses them after they match the car's speed. They weren't heard on the car it was tried on.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
 
 <details>
@@ -300,6 +322,8 @@ The APK is written to `app/build/outputs/apk/debug/`. Builds from source don't i
 | `core/CarProfiles.kt` | Saved cars and recognizing them |
 | `core/CarTheme.kt` | Theme colours and keeping them readable |
 | `core/Obd.kt` | OBD-II protocol and VIN reading |
+| `core/SourceTiming.kt` | Each speed source's delay and the speedometer's error |
+| `core/StillnessModel.kt` | The car's vibration when parked and rolling |
 | `ObdLinks.kt` | Classic Bluetooth and Bluetooth LE adapter connections |
 | `car/SpeedCarAppService.kt` | Android Auto screen |
 | `TelemetryScreen.kt` | The app's screens |

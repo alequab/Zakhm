@@ -62,6 +62,26 @@ class ClassicObdLink(device: BluetoothDevice, secure: Boolean) : ObdLink {
         return null
     }
 
+    override fun readLine(timeoutMs: Long): String? {
+        val input = socket.inputStream
+        val text = StringBuilder()
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (input.available() == 0) {
+                Thread.sleep(1)
+                continue
+            }
+            val c = input.read()
+            if (c < 0) return null
+            when (c.toChar()) {
+                '>' -> return ObdTransport.PROMPT
+                '\r', '\n' -> if (text.isNotEmpty()) return text.toString()
+                else -> text.append(c.toChar())
+            }
+        }
+        return null
+    }
+
     override fun close() {
         try {
             socket.close()
@@ -87,11 +107,15 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
     @Volatile private var failed = false
     @Volatile private var closed = false
     @Volatile private var writer: BluetoothGattCharacteristic? = null
+    @Volatile private var notifier: BluetoothGattCharacteristic? = null
+    @Volatile private var notificationsRequested = false
     @Volatile private var gatt: BluetoothGatt? = null
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                // Talks every 7.5 to 15 ms instead of Android's usual 30 to 50, which is most of each request's wait.
+                g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                 g.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 fail()
@@ -102,6 +126,18 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
             if (status != BluetoothGatt.GATT_SUCCESS) return fail()
             val (write, notify) = findSerialCharacteristics(g) ?: return fail()
             writer = write
+            notifier = notify
+            // Bigger packets carry a reply in one piece. The answer arrives in onMtuChanged.
+            if (!g.requestMtu(WANTED_MTU)) enableNotifications(g, notify)
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            notifier?.let { enableNotifications(g, it) }
+        }
+
+        private fun enableNotifications(g: BluetoothGatt, notify: BluetoothGattCharacteristic) {
+            if (notificationsRequested) return
+            notificationsRequested = true
             g.setCharacteristicNotification(notify, true)
             val descriptor = notify.getDescriptor(CLIENT_CONFIG) ?: return ready.countDown()
             val value = if (notify.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
@@ -140,7 +176,8 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
     }
 
     fun open() {
-        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        // Asks for Bluetooth 5's faster radio mode; most adapters keep the standard one, which is fine.
+        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE, BluetoothDevice.PHY_LE_2M_MASK)
             ?: throw IOException("Bluetooth is off")
         val finished = ready.await(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         if (!finished || failed) throw IOException("Could not set up the Bluetooth LE adapter")
@@ -193,6 +230,22 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
         return null
     }
 
+    override fun readLine(timeoutMs: Long): String? {
+        val text = StringBuilder()
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (!closed && !failed) {
+            val wait = deadline - SystemClock.elapsedRealtime()
+            if (wait <= 0) return null
+            val b = incoming.poll(wait, TimeUnit.MILLISECONDS) ?: return null
+            when (val c = (b.toInt() and 0xFF).toChar()) {
+                '>' -> return ObdTransport.PROMPT
+                '\r', '\n' -> if (text.isNotEmpty()) return text.toString()
+                else -> text.append(c)
+            }
+        }
+        return null
+    }
+
     /** Called from both the connection's thread and whichever thread stops it. */
     @Synchronized
     override fun close() {
@@ -225,6 +278,7 @@ class BleObdLink(private val context: Context, private val device: BluetoothDevi
         const val CONNECT_TIMEOUT_SECONDS = 30L
         const val WRITE_ATTEMPTS = 5
         const val WRITE_RETRY_MS = 20L
+        const val WANTED_MTU = 247
         val CLIENT_CONFIG: UUID = bluetoothUuid("2902")
         val COMMON_SERIAL_SERVICES = listOf(
             bluetoothUuid("FFE0"),

@@ -24,6 +24,9 @@
     <string name="status_obd_waiting">OBD-II connected, waiting for speed</string>
     <string name="status_obd_no_answer">Car isn\'t answering OBD-II</string>
     <string name="status_obd_failed">Can\'t reach the OBD-II adapter</string>
+    <string name="status_obd_disconnected">OBD-II disconnected</string>
+    <string name="obd_disconnect">Disconnect</string>
+    <string name="obd_connect">Connect</string>
     <string name="status_obd_live">OBD-II · car speed</string>
     <string name="status_auto_live">Android Auto · car speed</string>
     <string name="status_location_off">Turn on Location in phone settings</string>
@@ -37,6 +40,7 @@
     <string name="calibrate_stop">Finding the phone\'s angle. Keep it still, or just start driving</string>
     <string name="calibrate_learning">Just drive normally: speed up, brake and turn. Learning %1$d%%</string>
     <string name="calibrating">Calibrating</string>
+    <string name="phone_in_hand">Phone in hand. G-force paused</string>
 
     <string name="unit_kmh">km/h</string>
     <string name="unit_mph">mph</string>

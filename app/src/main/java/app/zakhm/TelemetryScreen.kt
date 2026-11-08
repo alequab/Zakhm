@@ -78,6 +78,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -139,6 +140,7 @@ class ScreenActions(
     val selectObdDevice: (String) -> Unit,
     val requestBluetooth: () -> Unit,
     val scanForAdapters: () -> Unit,
+    val toggleObdConnection: () -> Unit,
     val selectCar: (String) -> Unit,
     val addCar: (String) -> Unit,
     val renameCar: (String, String) -> Unit,
@@ -160,6 +162,9 @@ private val PanelShape = RoundedCornerShape(18.dp)
 
 private const val MAX_CAR_NAME_LENGTH = 40
 private const val METER_RANGE_G = 1.0
+
+/** Half a meter label's height, so the outer ring passes through the labels' middle. */
+private val METER_LABEL_INSET = 7.dp
 private const val HIGH_G = 0.6
 private const val TRAIL_POINTS = 40
 private const val GAUGE_START_DEGREES = 135f
@@ -438,6 +443,7 @@ private fun speedStatus(state: TelemetryUiState, useMph: Boolean): Pair<String, 
                 ObdState.CONNECTED -> R.string.status_obd_waiting
                 ObdState.CAR_NOT_RESPONDING -> R.string.status_obd_no_answer
                 ObdState.FAILED -> R.string.status_obd_failed
+                ObdState.DISCONNECTED -> R.string.status_obd_disconnected
             },
         )
     }
@@ -604,11 +610,12 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
     val colors = LocalDash.current
     val dotColor = if (total >= HIGH_G) colors.alert else colors.accent
 
-    Box(modifier.panel().padding(4.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.panel().padding(2.dp), contentAlignment = Alignment.Center) {
         // Left and right here are the car's real directions, so they never mirror for Arabic.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Box(Modifier.aspectRatio(1f, matchHeightConstraintsFirst = true), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize().padding(13.dp)) {
+                // The ring runs through the middle of its labels, so it can use the panel's full size.
+                Canvas(Modifier.fillMaxSize().padding(METER_LABEL_INSET)) {
                     val radius = size.minDimension / 2
                     val center = Offset(size.width / 2, size.height / 2)
                     listOf(0.25, 0.5, 0.75, 1.0).forEach { g ->
@@ -639,11 +646,17 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
                 // In the circle's empty middle, so the gauges keep their size when it comes and goes.
                 if (long == null) {
                     Text(
-                        calibrationHint(s) ?: stringResource(R.string.calibrating),
+                        if (s.phoneInHand) {
+                            stringResource(R.string.phone_in_hand)
+                        } else {
+                            calibrationHint(s) ?: stringResource(R.string.calibrating)
+                        },
                         Modifier.padding(horizontal = 44.dp).background(Panel).padding(4.dp),
                         color = Accent,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
+                        // The meter is laid out left to right, but a sentence must keep its own language's direction.
+                        style = TextStyle(textDirection = TextDirection.Content),
                     )
                 }
             }
@@ -893,6 +906,15 @@ private fun ObdSettings(state: TelemetryUiState, settings: ScreenSettings, actio
         ChoiceChip(device.name, device.address == state.obdAddress, Modifier.fillMaxWidth()) {
             actions.selectObdDevice(device.address)
         }
+    }
+    // Lets go of the adapter, as when another app needs it, until asked to connect again.
+    if (saved != null) {
+        val disconnected = state.obdState == ObdState.DISCONNECTED
+        CompactButton(
+            stringResource(if (disconnected) R.string.obd_connect else R.string.obd_disconnect),
+            actions.toggleObdConnection,
+            Modifier.fillMaxWidth(),
+        )
     }
 }
 

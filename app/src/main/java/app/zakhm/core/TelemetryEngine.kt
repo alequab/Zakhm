@@ -20,6 +20,27 @@ data class SpeedFix(
     val speed: Double?,
     val speedAccuracy: Double?,
     val horizontalAccuracy: Double?,
+    val source: FixSource = FixSource.GPS,
+)
+
+enum class FixSource { GPS, CAR }
+
+/** What the engine has learned about a car beyond its mount, saved with the car. */
+data class LearnedCar(
+    val stillness: StillnessStats = StillnessStats(),
+    val carLag: Double? = null,
+    val gpsLag: Double? = null,
+    val carScale: Double? = null,
+)
+
+/** How a GPS reading compared with the car's own speed at the same moment, for the log. */
+data class GpsCheck(
+    val time: Double,
+    val gpsSpeed: Double,
+    val gpsAccuracy: Double?,
+    val carSpeed: Double?,
+    val estimate: Double,
+    val gpsLag: Double?,
 )
 
 data class Peaks(
@@ -45,6 +66,8 @@ data class TelemetrySnapshot(
     val stopped: Boolean = false,
     val gpsSpeedAccuracyMps: Double? = null,
     val gpsHorizontalAccuracyM: Double? = null,
+    /** Someone is holding or moving the phone, so G-force is hidden and peaks are paused. */
+    val phoneInHand: Boolean = false,
 )
 
 /**
@@ -95,6 +118,28 @@ class TelemetryEngine {
     private var peakSignal: Vec3? = null
     private var peaks = Peaks()
 
+    private var inHand = false
+    private var lastShake = Double.NEGATIVE_INFINITY
+    private var lastHandCheck = Double.NEGATIVE_INFINITY
+    private var lastPeaksCheckpoint = Double.NEGATIVE_INFINITY
+    private var recentPeaks = Peaks()
+    private var olderPeaks = Peaks()
+
+    private var stillnessModel = StillnessModel()
+    private var carTiming = SourceTiming()
+    private var gpsTiming = SourceTiming()
+    private var carScale = SpeedScale()
+    private var lastCarFix = Double.NEGATIVE_INFINITY
+    private var lastStillnessLearned = Double.NEGATIVE_INFINITY
+
+    /** The latest GPS reading next to the car's speed at the same moment, for the log. */
+    var lastGpsCheck: GpsCheck? = null
+        private set
+
+    /** What the vibration said at the last stop check, for the log. */
+    var lastStillness = Stillness.UNKNOWN
+        private set
+
     private var mountCheckTime = Double.NaN
     private var mountCheckSpeed = 0.0
     private var mountMismatches = 0
@@ -127,7 +172,9 @@ class TelemetryEngine {
         val fwd = forward
         if (validDt) {
             val motion = up?.let { force - it * gravityMagnitude }
-            speedFilter.predict(dt, if (fwd != null && motion != null) motion dot fwd else null)
+            // A hand's movements say nothing about the car's, so GPS alone carries the speed meanwhile.
+            val forwardAccel = if (fwd != null && motion != null && !inHand) motion dot fwd else null
+            speedFilter.predict(dt, forwardAccel)
             if (motion != null) smoothAndTrackPeaks(motion, dt)
         }
 
@@ -139,22 +186,97 @@ class TelemetryEngine {
 
         history.add(time, force, rawGyro, speedFilter.speed - speedFilter.cumulativeCorrection, calm, calmGyro)
 
+        if (time - lastHandCheck >= HAND_CHECK_INTERVAL) {
+            lastHandCheck = time
+            checkHand(time)
+        }
         if (time - lastStopCheck >= STOP_CHECK_INTERVAL) {
             lastStopCheck = time
             checkStopped(time)
         }
     }
 
+    /**
+     * Notices the phone being picked up or moved within a fraction of a second. A hand
+     * turns the phone far faster than a car turns: measured on a real drive, about
+     * 1.2 rad/s of wobble in a hand against under 0.06 in a mount, even through turns.
+     */
+    private fun checkHand(time: Double) {
+        val w = history.window(time - HAND_WINDOW_SECONDS, time) ?: return
+        val shaking = w.gyroStd > HAND_GYRO_STD
+        if (shaking) lastShake = time
+        val up = mountUp
+        val tracked = gravityUp
+        val tilted = up != null && tracked != null && angleBetween(up, tracked) > MOUNT_MOVED_RADIANS
+        val settling = time - lastShake < HAND_SETTLE_SECONDS
+
+        if (!inHand && (shaking || tilted)) {
+            inHand = true
+            // The first moments of handling got through before it was noticed.
+            peaks = olderPeaks
+            peaksBeforeMismatch = olderPeaks
+            peakSignal = null
+            smoothedAccel = null
+            cruisingForce = Vec3.ZERO
+            cruisingSamples = 0
+        }
+        if (inHand && !settling) {
+            // Put back the same way, the calibration still fits. Turned, it has to be learned again.
+            if (tilted) {
+                noteCalibrationLoss("put back at a different angle: %.1f deg".format(java.util.Locale.US, Math.toDegrees(angleBetween(up!!, tracked!!))))
+                resetMount()
+            }
+            inHand = false
+            smoothedAccel = null
+            peakSignal = null
+            anchorTime = Double.NaN
+            mountCheckTime = Double.NaN
+        }
+
+        if (!inHand && time - lastPeaksCheckpoint >= PEAKS_CHECKPOINT_SECONDS) {
+            lastPeaksCheckpoint = time
+            olderPeaks = recentPeaks
+            recentPeaks = peaks
+        }
+    }
+
     fun onSpeedFix(fix: SpeedFix) {
-        gpsHorizontalAccuracy = fix.horizontalAccuracy
-        gpsSpeedAccuracy = fix.speedAccuracy
-        val measured = fix.speed?.takeIf { it.isFinite() } ?: return
+        val reported = fix.speed?.takeIf { it.isFinite() } ?: return
+        val isCar = fix.source == FixSource.CAR
+        if (!isCar) {
+            gpsHorizontalAccuracy = fix.horizontalAccuracy
+            gpsSpeedAccuracy = fix.speedAccuracy
+        }
+        // Trust the fix's own timestamp unless it's clearly on a different clock.
+        val stamped = if (!fix.time.isFinite() || fix.time < now - MAX_FIX_AGE || fix.time > now + MAX_FIX_LEAD) now else fix.time
+
+        // Each source reports a little late; once that delay is measured, the reading goes where it belongs.
+        val timing = if (isCar) carTiming else gpsTiming
+        if (phoneSpeedKnown()) timing.add(stamped, reported, ::phoneSpeedAt) else timing.breakChain()
+        val fixTime = stamped - (timing.lag ?: 0.0)
+
+        val measured: Double
+        if (isCar) {
+            carScale.addCar(fixTime, reported)
+            measured = reported * carScale.factor
+            lastCarFix = stamped
+        } else {
+            measured = reported
+            val car = carScale.addGps(fixTime, reported, fix.speedAccuracy)
+            lastGpsCheck = GpsCheck(
+                time = fixTime,
+                gpsSpeed = reported,
+                gpsAccuracy = fix.speedAccuracy,
+                carSpeed = car,
+                estimate = (history.speedAt(fixTime)?.plus(speedFilter.cumulativeCorrection)) ?: speedFilter.speed,
+                gpsLag = timing.lag,
+            )
+            // With the car's own speed coming in, GPS is compared and learned from, not shown.
+            if (stamped - lastCarFix <= CAR_FRESH_SECONDS) return
+        }
         val sigma = fix.speedAccuracy?.takeIf { it > 0.0 && it.isFinite() } ?: DEFAULT_GPS_SIGMA
         if (sigma > MAX_GPS_SIGMA) return
-
-        // Trust the fix's own timestamp unless it's clearly on a different clock.
-        val fixTime = if (!fix.time.isFinite() || fix.time < now - MAX_FIX_AGE || fix.time > now + MAX_FIX_LEAD) now else fix.time
-        if (mountWasMoved(fixTime, measured)) {
+        if (!inHand && mountWasMoved(fixTime, measured)) {
             resetMount()
             peaks = peaksBeforeMismatch
             speedFilter.restartFrom(measured, max(sigma, MIN_GPS_SIGMA))
@@ -164,7 +286,13 @@ class TelemetryEngine {
         val accepted = speedFilter.update(measured, max(sigma, MIN_GPS_SIGMA), predicted ?: speedFilter.speed)
         if (!accepted) return
         now = max(now, fixTime)
-        lastUsableFix = fix.copy(time = fixTime)
+        // Kept with the time it was stamped, not moved back by its delay, as this says how fresh it is.
+        lastUsableFix = fix.copy(time = stamped, speed = measured)
+        // Whatever the sensors felt in a hand would teach the wrong axes.
+        if (inHand) {
+            anchorTime = Double.NaN
+            return
+        }
         learnFromFix(fixTime, measured)
     }
 
@@ -177,7 +305,13 @@ class TelemetryEngine {
 
     fun resetPeaks() {
         peaks = Peaks()
+        rememberPeaksAsSafe()
+    }
+
+    private fun rememberPeaksAsSafe() {
         peaksBeforeMismatch = peaks
+        recentPeaks = peaks
+        olderPeaks = peaks
     }
 
     fun mountCalibration(): MountCalibration? = mountUp?.let { MountCalibration(it, forward) }
@@ -189,13 +323,19 @@ class TelemetryEngine {
      * starting point: a phone tilted differently is caught at the next stop, and a
      * phone turned differently is corrected by fresh forward learning.
      */
-    fun loadCar(mount: MountCalibration?, savedPeaks: Peaks) {
+    fun loadCar(mount: MountCalibration?, savedPeaks: Peaks, learned: LearnedCar = LearnedCar()) {
         resetMount()
+        stillnessModel = StillnessModel(learned.stillness)
+        carTiming = SourceTiming(learned.carLag)
+        gpsTiming = SourceTiming(learned.gpsLag)
+        carScale = SpeedScale(learned.carScale)
+        lastStillness = Stillness.UNKNOWN
         mountUp = mount?.up
         gravityUp = mount?.up
         forward = mount?.forward
         peaks = savedPeaks
-        peaksBeforeMismatch = savedPeaks
+        rememberPeaksAsSafe()
+        inHand = false
         peakSignal = null
         stopped = false
         lastStopCheck = Double.NEGATIVE_INFINITY
@@ -204,7 +344,7 @@ class TelemetryEngine {
     fun snapshot(): TelemetrySnapshot {
         val up = mountUp
         val fwd = forward
-        val motion = smoothedAccel
+        val motion = smoothedAccel?.takeIf { !inHand }
         val longitudinal: Double?
         val lateral: Double?
         val total: Double?
@@ -245,6 +385,7 @@ class TelemetryEngine {
             stopped = stopped,
             gpsSpeedAccuracyMps = gpsSpeedAccuracy,
             gpsHorizontalAccuracyM = gpsHorizontalAccuracy,
+            phoneInHand = inHand,
         )
     }
 
@@ -276,6 +417,7 @@ class TelemetryEngine {
         val held = peakSignal?.let { it + (smoothing2 - it) * peakAlpha } ?: smoothing2
         peakSignal = held
 
+        if (inHand) return
         val up = mountUp ?: return
         val fwd = forward ?: return
         val longitudinal = (held dot fwd) / STANDARD_GRAVITY
@@ -297,8 +439,23 @@ class TelemetryEngine {
 
         val fix = lastUsableFix
         val gpsFresh = fix != null && time - fix.time <= GPS_FRESH_SECONDS
-        // A car on a smooth road can feel still, so GPS has the final say when it's available.
-        if (gpsFresh && fix.speed!! > GPS_STOPPED_SPEED) {
+        val still = stillnessModel.classify(w.forceStd, w.gyroStd)
+        lastStillness = still
+        if (gpsFresh) learnStillness(time, w, fix!!)
+        val fromGps = fix?.source != FixSource.CAR
+
+        // A car on a smooth road can feel still, so the measured speed has the final say when it's
+        // available. The exception: a small GPS speed while this car's learned vibration says
+        // parked, as receivers report several km/h standing still.
+        if (gpsFresh && fix!!.speed!! > GPS_STOPPED_SPEED) {
+            val gpsDrift = fromGps && still == Stillness.PARKED && fix.speed!! <= MAX_PARKED_GPS_SPEED
+            if (!gpsDrift) {
+                stopped = false
+                return
+            }
+        }
+        // The same vibration says when a parked car starts rolling, before GPS notices.
+        if (stopped && fromGps && still == Stillness.ROLLING) {
             stopped = false
             return
         }
@@ -351,7 +508,8 @@ class TelemetryEngine {
         } else {
             motion.norm - hypot(speedChangeRate, turnAccel)
         }
-        val mismatch = unexplained > MAX_UNEXPLAINED_ACCEL || angleBetween(up, tracked) > MOUNT_MOVED_RADIANS
+        val tilt = angleBetween(up, tracked)
+        val mismatch = unexplained > MAX_UNEXPLAINED_ACCEL || tilt > MOUNT_MOVED_RADIANS
         if (!mismatch) {
             mountMismatches = 0
             peaksBeforeMismatch = peaks
@@ -360,8 +518,71 @@ class TelemetryEngine {
         mountMismatches++
         if (mountMismatches < MOUNT_MISMATCHES_NEEDED) return false
         mountMismatches = 0
+        noteCalibrationLoss(
+            "sensors disagree with speed: unexplained=%.2f m/s2 tilt=%.1f deg speed=%.1f km/h rate=%.2f turn=%.2f forwardKnown=%s".format(
+                java.util.Locale.US, unexplained, Math.toDegrees(tilt), averageSpeed * 3.6, speedChangeRate, turnAccel, fwd != null,
+            ),
+        )
         return true
     }
+
+    /** Teaches the car's parked and rolling vibration from moments a trusted speed says which it is. */
+    private fun learnStillness(time: Double, w: WindowStats, fix: SpeedFix) {
+        if (inHand || time - lastStillnessLearned < STILLNESS_LEARN_SECONDS) return
+        val speed = fix.speed ?: return
+        val parked = when (fix.source) {
+            // The car's own speed is the best judge; it reads whole km/h, so 0 is a true stop.
+            FixSource.CAR -> when {
+                speed == 0.0 -> true
+                speed in CAR_ROLLING_LEARN_RANGE -> false
+                else -> null
+            }
+            // GPS only when it's clear-cut: zero and sure of itself, or well above the speeds it imagines.
+            FixSource.GPS -> {
+                val accuracy = fix.speedAccuracy ?: Double.MAX_VALUE
+                when {
+                    speed < GPS_PARKED_LEARN_SPEED && accuracy <= GPS_PARKED_LEARN_ACCURACY -> true
+                    speed in GPS_ROLLING_LEARN_RANGE && accuracy <= GPS_ROLLING_LEARN_ACCURACY -> false
+                    else -> null
+                }
+            }
+        } ?: return
+        lastStillnessLearned = time
+        if (parked) stillnessModel.learnParked(w.forceStd, w.gyroStd) else stillnessModel.learnRolling(w.forceStd, w.gyroStd)
+    }
+
+    private fun phoneSpeedKnown() = mountUp != null && forward != null && !inHand && speedFilter.initialized
+
+    private fun phoneSpeedAt(time: Double): Double? = history.speedAt(time)
+
+    /** How many times calibration has been thrown away, and why the last time, for the log. */
+    var calibrationLosses = 0
+        private set
+    var lastCalibrationLoss: String? = null
+        private set
+
+    private fun noteCalibrationLoss(reason: String) {
+        calibrationLosses++
+        lastCalibrationLoss = reason
+    }
+
+    /** What's been learned about this car beyond its mount, to save with it. */
+    fun learnedCar() = LearnedCar(
+        stillness = stillnessModel.stats,
+        carLag = carTiming.lag,
+        gpsLag = gpsTiming.lag,
+        carScale = carScale.learned ?: carScale.factor.takeIf { it != 1.0 },
+    )
+
+    /** One line on everything learned so far, for the debug log. */
+    fun learningSummary(): String =
+        "still={${stillnessModel.describe()}} now=$lastStillness obd={${carTiming.describe()}} " +
+            "gps={${gpsTiming.describe()}} scale=%.4f learned=%s samples=%d".format(
+                java.util.Locale.US,
+                carScale.factor,
+                carScale.learned != null,
+                carScale.sampleCount,
+            )
 
     private fun onStopped(w: WindowStats) {
         val measuredUp = w.meanForce.normalized()
@@ -370,6 +591,9 @@ class TelemetryEngine {
 
         val up = mountUp
         if (up == null || angleBetween(up, measuredUp) > MOUNT_MOVED_RADIANS) {
+            if (up != null) {
+                noteCalibrationLoss("tilted at a stop: %.1f deg".format(java.util.Locale.US, Math.toDegrees(angleBetween(up, measuredUp))))
+            }
             resetMount()
             mountUp = measuredUp
             gravityUp = measuredUp
@@ -477,6 +701,16 @@ class TelemetryEngine {
         /** What a peak must get through, on top of the smoothing above. */
         const val PEAK_SMOOTHING_RATE = 2 * Math.PI * 2.0
 
+        const val HAND_CHECK_INTERVAL = 0.1
+        const val HAND_WINDOW_SECONDS = 0.5
+
+        /** Between a mount through hard turns (measured under 0.06) and a hand (measured 1.2 and up). */
+        const val HAND_GYRO_STD = 0.3
+
+        /** How long the phone must be left alone before readings come back. */
+        const val HAND_SETTLE_SECONDS = 2.0
+        const val PEAKS_CHECKPOINT_SECONDS = 1.0
+
         const val STOP_CHECK_INTERVAL = 0.1
         const val STOP_WINDOW_SECONDS = 1.5
         const val CALM_RATE = 2 * Math.PI * 2.0
@@ -486,6 +720,16 @@ class TelemetryEngine {
         const val STOP_GYRO_STD_NO_GPS = 0.02
         const val STOP_GYRO_MEAN = 0.05
         const val GPS_STOPPED_SPEED = 0.8
+
+        /** About 14 km/h. Faster than any GPS drift seen while parked, so it's always believed. */
+        const val MAX_PARKED_GPS_SPEED = 4.0
+        const val CAR_FRESH_SECONDS = 2.0
+        const val STILLNESS_LEARN_SECONDS = 0.5
+        val CAR_ROLLING_LEARN_RANGE = 1.0..5.5
+        const val GPS_PARKED_LEARN_SPEED = 0.2
+        const val GPS_PARKED_LEARN_ACCURACY = 0.5
+        val GPS_ROLLING_LEARN_RANGE = 4.0..6.0
+        const val GPS_ROLLING_LEARN_ACCURACY = 1.0
         const val STOPPED_BLEND = 0.2
 
         /** More than any road slope: if gravity has moved this far, the phone was moved. */

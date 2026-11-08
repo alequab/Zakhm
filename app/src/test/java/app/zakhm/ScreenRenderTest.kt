@@ -86,6 +86,7 @@ class ScreenRenderTest {
         selectObdDevice = {},
         requestBluetooth = {},
         scanForAdapters = {},
+        toggleObdConnection = {},
         selectCar = {},
         addCar = {},
         renameCar = { _, _ -> },
@@ -144,6 +145,13 @@ class ScreenRenderTest {
     fun calibrating() {
         show(state(snapshot = driving.copy(calibration = CalibrationState.LEARNING_FORWARD, longitudinalG = null, lateralG = null)))
         save("calibrating")
+    }
+
+    @Test
+    @Config(qualifiers = "ar-w393dp-h851dp-port-xxhdpi")
+    fun phoneInHand() {
+        show(state(snapshot = driving.copy(phoneInHand = true, longitudinalG = null, lateralG = null, totalG = null)))
+        save("phone-in-hand-ar")
     }
 
     @Test

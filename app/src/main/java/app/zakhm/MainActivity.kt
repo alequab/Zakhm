@@ -198,6 +198,7 @@ class MainActivity : ComponentActivity() {
             selectObdDevice = { controller.selectObdDevice(it) },
             requestBluetooth = ::requestBluetooth,
             scanForAdapters = ::scanForAdapters,
+            toggleObdConnection = { controller.toggleObdConnection() },
             selectCar = { controller.selectCar(it) },
             addCar = { controller.addCar(it) },
             renameCar = { id, name -> controller.renameCar(id, name) },

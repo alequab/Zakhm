@@ -41,6 +41,7 @@ data class CarProfile(
     val mount: MountCalibration? = null,
     val peaks: Peaks = Peaks(),
     val theme: CarTheme = CarTheme.DEFAULT,
+    val learned: LearnedCar = LearnedCar(),
 )
 
 /** The saved cars and which one is in use. There is always at least one. */
@@ -176,8 +177,38 @@ object CarProfileJson {
             json.put("mountUp", encodeVector(mount.up))
             mount.forward?.let { json.put("mountForward", encodeVector(it)) }
         }
+        json.put("learned", encodeLearned(car.learned))
         return json
     }
+
+    private fun encodeLearned(learned: LearnedCar): JSONObject {
+        val s = learned.stillness
+        val json = JSONObject()
+            .put("parkedForce", encodeStats(s.parkedForce))
+            .put("parkedGyro", encodeStats(s.parkedGyro))
+            .put("rollingForce", encodeStats(s.rollingForce))
+            .put("rollingGyro", encodeStats(s.rollingGyro))
+        learned.carLag?.let { json.put("carLag", it) }
+        learned.gpsLag?.let { json.put("gpsLag", it) }
+        learned.carScale?.let { json.put("carScale", it) }
+        return json
+    }
+
+    private fun decodeLearned(json: JSONObject?): LearnedCar {
+        if (json == null) return LearnedCar()
+        fun stats(name: String) = json.optJSONArray(name)?.let(::decodeStats) ?: RunningStats()
+        fun number(name: String) = if (json.has(name)) json.optDouble(name).takeIf { it.isFinite() } else null
+        return LearnedCar(
+            stillness = StillnessStats(stats("parkedForce"), stats("parkedGyro"), stats("rollingForce"), stats("rollingGyro")),
+            carLag = number("carLag"),
+            gpsLag = number("gpsLag"),
+            carScale = number("carScale"),
+        )
+    }
+
+    private fun encodeStats(s: RunningStats) = JSONArray().put(s.count).put(s.mean).put(s.m2)
+
+    private fun decodeStats(a: JSONArray) = RunningStats(a.getDouble(0), a.getDouble(1), a.getDouble(2))
 
     private fun decodeCar(json: JSONObject) = CarProfile(
         id = json.getString("id"),
@@ -199,6 +230,7 @@ object CarProfileJson {
             background = json.optInt("themeBackground", CarTheme.DEFAULT.background),
             panel = json.optInt("themePanel", CarTheme.DEFAULT.panel),
         ),
+        learned = decodeLearned(json.optJSONObject("learned")),
     )
 
     private fun encodeVector(v: Vec3) = JSONArray().put(v.x).put(v.y).put(v.z)

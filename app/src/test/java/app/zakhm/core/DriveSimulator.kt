@@ -44,7 +44,26 @@ class DriveSimulator(
     startSpeed: Double = 0.0,
     seed: Long = 42,
     startTime: Double = 100.0,
+    /** How late the GPS chip's speed is: it reports the speed of this many seconds earlier. */
+    private val gpsSpeedLag: Double = 0.0,
+    /** An OBD adapter, or null for none. */
+    private val obd: SimulatedObd? = null,
+    /** Strength of the road's shake while rolling, in m/s^2. A parked car has none. */
+    private val roadRumble: Double = 0.0,
 ) {
+    /** Reports [scale] times the speed of [lag] seconds earlier, [rate] times a second, in whole km/h. */
+    data class SimulatedObd(val rate: Double = 5.0, val lag: Double = 0.6, val scale: Double = 1.0)
+
+    /** Added to every GPS speed, for a receiver reporting speed the car doesn't have. */
+    var gpsError = 0.0
+
+    private val pastSpeeds = ArrayDeque<Pair<Double, Double>>()
+    private var nextObdTime = startTime
+
+    private fun speedAgo(seconds: Double): Double {
+        val target = time - seconds
+        return pastSpeeds.lastOrNull { it.first <= target }?.second ?: pastSpeeds.firstOrNull()?.second ?: speed
+    }
     private val random = Random(seed)
     private val imuRate = 200
     private val dt = 1.0 / imuRate
@@ -96,17 +115,28 @@ class DriveSimulator(
         val shake = sin(2 * Math.PI * 25.0 * time)
         val sway = sin(2 * Math.PI * 0.7 * time)
         val wobble = mountShake * sin(2 * Math.PI * 8.0 * time)
-        val shakeForce = Vec3(idleVibration * shake + handling * sway + wobble, idleVibration * shake * 0.5 + wobble, idleVibration * shake)
-        val shakeGyro = Vec3(0.06 * shake * idleVibration + 0.4 * sway * handling, 0.0, 0.03 * shake * idleVibration)
+        // Road surface: slow, uneven bumps that only a rolling car feels.
+        val rumble = if (speed > 0.05) roadRumble * (sin(2 * Math.PI * 1.3 * time) + 0.7 * sin(2 * Math.PI * 1.9 * time + 1.0)) else 0.0
+        val shakeForce = Vec3(idleVibration * shake + handling * sway + wobble, idleVibration * shake * 0.5 + wobble, idleVibration * shake + rumble)
+        val shakeGyro = Vec3(0.06 * shake * idleVibration + 0.4 * sway * handling + 0.02 * rumble, 0.01 * rumble, 0.03 * shake * idleVibration)
         engine.onGyro(time, toPhone(gyroCar + shakeGyro) + gyroBias + noise(gyroNoise))
         engine.onAccel(time, toPhone(forceCar + shakeForce) + accelBias + noise(vibration))
+
+        pastSpeeds.addLast(time to speed)
+        while (pastSpeeds.size > 2 && pastSpeeds.first().first < time - 5.0) pastSpeeds.removeFirst()
 
         if (time >= nextGpsTime) {
             nextGpsTime += 1.0
             if (gpsEnabled) {
-                val measured = (speed + random.nextGaussian() * gpsNoise).coerceAtLeast(0.0)
+                val measured = (speedAgo(gpsSpeedLag) + gpsError + random.nextGaussian() * gpsNoise).coerceAtLeast(0.0)
                 pendingFixes.addLast(SpeedFix(time, measured, 0.3, 4.0))
             }
+        }
+        if (obd != null && time >= nextObdTime) {
+            nextObdTime += 1.0 / obd.rate
+            // Whole km/h, as the standard request gives.
+            val kmh = Math.round(speedAgo(obd.lag) * obd.scale * 3.6).toDouble()
+            engine.onSpeedFix(SpeedFix(time, kmh / 3.6, 0.3, null, FixSource.CAR))
         }
         while (pendingFixes.isNotEmpty() && time >= pendingFixes.first().time + gpsLatency) {
             engine.onSpeedFix(pendingFixes.removeFirst())

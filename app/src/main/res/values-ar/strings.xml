@@ -24,6 +24,9 @@
     <string name="status_obd_waiting">تم الاتصال بـ OBD-II، بانتظار السرعة</string>
     <string name="status_obd_no_answer">السيارة لا تستجيب عبر OBD-II</string>
     <string name="status_obd_failed">تعذّر الوصول إلى محوّل OBD-II</string>
+    <string name="status_obd_disconnected">فُصل OBD-II</string>
+    <string name="obd_disconnect">قطع الاتصال</string>
+    <string name="obd_connect">اتصال</string>
     <string name="status_obd_live">OBD-II · سرعة السيارة</string>
     <string name="status_auto_live">Android Auto · سرعة السيارة</string>
     <string name="status_location_off">شغّل الموقع من إعدادات الهاتف</string>
@@ -37,6 +40,7 @@
     <string name="calibrate_stop">جارٍ تحديد زاوية الهاتف. أبقِه ثابتًا، أو ابدأ القيادة فقط</string>
     <string name="calibrate_learning">قُد بشكل طبيعي: زد السرعة وفرمل وانعطف. اكتمل التعلم %1$d%%</string>
     <string name="calibrating">جارٍ المعايرة</string>
+    <string name="phone_in_hand">الهاتف في اليد، توقفت قراءة قوة G مؤقتًا</string>
 
     <string name="unit_kmh">كم/س</string>
     <string name="unit_mph">ميل/س</string>

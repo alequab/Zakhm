@@ -21,6 +21,7 @@ import app.zakhm.core.CarProfile
 import app.zakhm.core.CarRegistry
 import app.zakhm.core.CarTheme
 import app.zakhm.core.DriveLog
+import app.zakhm.core.FixSource
 import app.zakhm.core.SpeedFix
 import app.zakhm.core.SpeedInput
 import app.zakhm.core.SpeedRouter
@@ -126,16 +127,17 @@ class TelemetryController(private val context: Context) {
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             // GPS keeps running behind a car source, ready to take over if it goes quiet.
-            if (router.active(SystemClock.elapsedRealtimeNanos() / 1e9) != SpeedInput.PHONE) return
             val speed = if (location.hasSpeed()) location.speed else null
             val speedAccuracy = if (location.hasSpeedAccuracy()) location.speedAccuracyMetersPerSecond else null
             val horizontalAccuracy = if (location.hasAccuracy()) location.accuracy else null
+            // Always given to the engine: behind a car source it's compared and learned from, not shown.
             engine.onSpeedFix(
                 SpeedFix(
                     time = location.elapsedRealtimeNanos / 1e9,
                     speed = speed?.toDouble(),
                     speedAccuracy = speedAccuracy?.toDouble(),
                     horizontalAccuracy = horizontalAccuracy?.toDouble(),
+                    source = FixSource.GPS,
                 ),
             )
             record(DriveLog.gps(location.elapsedRealtimeNanos, speed, speedAccuracy, horizontalAccuracy))
@@ -235,11 +237,32 @@ class TelemetryController(private val context: Context) {
 
     /** Chooses the paired adapter the active car connects through. */
     fun selectObdDevice(address: String) = handler.post {
+        obdDisconnected = false
         cars.updateActive { it.copy(input = SpeedInput.OBD, obdAddress = address) }
         applyActiveSource()
+        // Choosing the adapter it was already set to still means "connect", after a disconnect.
+        if (running && obdConnection == null) startObdIfSelected()
         saveCars()
         publish()
     }
+
+    /**
+     * Lets go of the adapter, or connects again. Lasts until the app is next started,
+     * so a forgotten disconnect can't leave the car's speed off for good.
+     */
+    fun toggleObdConnection() = handler.post {
+        if (obdDisconnected) {
+            obdDisconnected = false
+            if (running) startObdIfSelected()
+        } else {
+            obdDisconnected = true
+            stopObd()
+            obdState = ObdState.DISCONNECTED
+        }
+        publish()
+    }
+
+    private var obdDisconnected = false
 
     fun selectCar(id: String) = handler.post {
         captureActiveCar()
@@ -308,7 +331,7 @@ class TelemetryController(private val context: Context) {
 
     /** Copies what the engine has learned about the active car into its profile. */
     private fun captureActiveCar() {
-        cars.updateActive { it.copy(mount = engine.mountCalibration(), peaks = engine.currentPeaks()) }
+        cars.updateActive { it.copy(mount = engine.mountCalibration(), peaks = engine.currentPeaks(), learned = engine.learnedCar()) }
     }
 
     private fun saveCars() {
@@ -318,7 +341,7 @@ class TelemetryController(private val context: Context) {
 
     private fun applyActiveCar() {
         val car = cars.active
-        engine.loadCar(car.mount, car.peaks)
+        engine.loadCar(car.mount, car.peaks, car.learned)
         applyActiveSource()
     }
 
@@ -389,6 +412,10 @@ class TelemetryController(private val context: Context) {
         val address = obdAddress
         val adapter = bluetoothManager?.adapter
         if (router.selected != SpeedInput.OBD || address == null || adapter == null) return
+        if (obdDisconnected) {
+            obdState = ObdState.DISCONNECTED
+            return
+        }
         // A stopped connection's last messages can still be on their way, and must not act on the new choice.
         val session = ++obdSession
         fun current(action: () -> Unit) = handler.post { if (session == obdSession) action() }
@@ -397,7 +424,7 @@ class TelemetryController(private val context: Context) {
             adapter = adapter,
             address = address,
             onState = { state -> current { obdState = state } },
-            onSpeed = { kmh, nanos -> current { onObdSpeed(kmh, nanos) } },
+            onSpeed = { kmh, nanos, reading -> current { onObdSpeed(kmh, nanos, reading) } },
             onVin = { vin ->
                 val name = context.getString(R.string.car_vin_name, vin.takeLast(CarIdentity.VIN_NAME_LENGTH))
                 current { onCarIdentified(CarIdentity.fromVin(vin, name), viaObd = true) }
@@ -412,8 +439,10 @@ class TelemetryController(private val context: Context) {
         obdState = ObdState.IDLE
     }
 
-    private fun onObdSpeed(kmh: Int, nanos: Long) {
-        useCarSpeed(SpeedInput.OBD, kmh / 3.6f, OBD_SPEED_SIGMA, nanos)
+    private fun onObdSpeed(kmh: Double, nanos: Long, reading: ObdReading) {
+        // Wheel speeds are far finer than the request's whole km/h.
+        val sigma = if (reading.kind == ObdReading.Kind.STREAM) OBD_STREAM_SIGMA else OBD_SPEED_SIGMA
+        useCarSpeed(SpeedInput.OBD, (kmh / 3.6).toFloat(), sigma, nanos)
     }
 
     private fun onAndroidAutoSpeed(metersPerSecond: Float) {
@@ -422,7 +451,7 @@ class TelemetryController(private val context: Context) {
 
     private fun useCarSpeed(source: SpeedInput, metersPerSecond: Float, sigma: Float, nanos: Long) {
         if (!router.onCarFix(source, nanos / 1e9)) return
-        engine.onSpeedFix(SpeedFix(nanos / 1e9, metersPerSecond.toDouble(), sigma.toDouble(), null))
+        engine.onSpeedFix(SpeedFix(nanos / 1e9, metersPerSecond.toDouble(), sigma.toDouble(), null, FixSource.CAR))
         record(DriveLog.car(nanos, metersPerSecond, sigma))
     }
 
@@ -513,6 +542,8 @@ class TelemetryController(private val context: Context) {
 
         /** OBD reports whole km/h, and wheel speed carries some error of its own. */
         const val OBD_SPEED_SIGMA = 0.3f
+        const val OBD_STREAM_SIGMA = 0.15f
+
         const val ANDROID_AUTO_SPEED_SIGMA = 0.2f
     }
 }
