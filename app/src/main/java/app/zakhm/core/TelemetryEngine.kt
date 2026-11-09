@@ -458,11 +458,8 @@ class TelemetryEngine {
                 return
             }
         }
-        // The same vibration says when a parked car starts rolling, before GPS notices.
-        if (stopped && fromGps && still == Stillness.ROLLING) {
-            stopped = false
-            return
-        }
+        // Only "parked" overrules GPS. A "rolling" verdict once also ended stops early, but it
+        // came up at real stops too, and on a real drive it fought GPS ten times a second.
 
         // Without GPS, a smooth road can feel still, so the car must also have slowed down to count as stopped.
         if (!gpsFresh && speedFilter.initialized && speedFilter.speed > GPS_STOPPED_SPEED) {

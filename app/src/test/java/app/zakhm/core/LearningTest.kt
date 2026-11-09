@@ -170,6 +170,38 @@ class LearningTest {
     }
 
     @Test
+    fun aStopDoesNotFlickerWhenTheVibrationSaysRolling() {
+        // On a real drive on GPS alone, stopped flipped every tenth of a second at a stop:
+        // GPS said stopped, the vibration said rolling, and each undid the other.
+        // A model where even this car's stillness looks like rolling recreates that.
+        val sim = DriveSimulator(engine)
+        sim.run(4.0)
+        sim.run(60.0, ::city)
+        engine.loadCar(
+            engine.mountCalibration(),
+            engine.currentPeaks(),
+            LearnedCar(
+                stillness = StillnessStats(
+                    parkedForce = stats(0.0005, 1.2),
+                    parkedGyro = stats(0.00005, 1.2),
+                    rollingForce = stats(0.005, 1.5),
+                    rollingGyro = stats(0.0005, 1.5),
+                ),
+            ),
+        )
+        while (sim.speed > 0.0) sim.run(0.1, { CarMotion(accel = -1.5) })
+        sim.run(3.0)
+        var changes = 0
+        var last = engine.snapshot().stopped
+        sim.run(10.0) {
+            val now = engine.snapshot().stopped
+            if (now != last) changes++
+            last = now
+        }
+        assertTrue("stopped flipped $changes times in 10 s", changes <= 2)
+    }
+
+    @Test
     fun whatWasLearnedIsSavedWithTheCar() {
         val learned = LearnedCar(
             stillness = StillnessStats(RunningStats(30.0, -3.2, 2.0), RunningStats(30.0, -6.9, 1.5), RunningStats(25.0, -1.3, 3.0), RunningStats(25.0, -5.2, 2.0)),
