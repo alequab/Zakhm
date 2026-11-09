@@ -149,4 +149,12 @@
     <string name="auto_waiting">Waiting for speed from this car. Not every car shares it.</string>
     <string name="auto_allow">Allow</string>
     <string name="auto_using_gps">Using the phone\'s GPS instead</string>
+    <string name="section_g_view">G-force view</string>
+    <string name="g_view_car">Car\'s movement</string>
+    <string name="g_view_driver">Felt by driver</string>
+    <string name="g_view_hint">Car\'s movement: the dot goes the way the car speeds up, brakes and turns. Felt by driver: the dot goes the way you\'re pushed in your seat, so braking moves it up and a left turn moves it right.</string>
+    <string name="section_g_range">G circle zoom</string>
+    <string name="g_range_choice">%1$s G</string>
+    <string name="g_range_ring">Ring %1$s G</string>
+    <string name="g_range_hint">What the outer ring stands for. Everyday driving stays under 0.5 G, so a smaller ring makes the dot move more.</string>
 </resources>

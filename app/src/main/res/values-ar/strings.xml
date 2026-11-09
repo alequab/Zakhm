@@ -149,4 +149,12 @@
     <string name="auto_waiting">بانتظار السرعة من هذه السيارة. لا تشاركها كل السيارات.</string>
     <string name="auto_allow">سماح</string>
     <string name="auto_using_gps">يُستخدم GPS الهاتف بدلًا من ذلك</string>
+    <string name="section_g_view">عرض قوة G</string>
+    <string name="g_view_car">حركة السيارة</string>
+    <string name="g_view_driver">ما يشعر به السائق</string>
+    <string name="g_view_hint">حركة السيارة: تتحرك النقطة في اتجاه تسارع السيارة وفرملتها وانعطافها. ما يشعر به السائق: تتحرك النقطة في الاتجاه الذي يدفعك إليه المقعد، فالفرملة ترفعها والانعطاف يسارًا ينقلها إلى اليمين.</string>
+    <string name="section_g_range">تكبير دائرة G</string>
+    <string name="g_range_choice">%1$s G</string>
+    <string name="g_range_ring">الحلقة %1$s G</string>
+    <string name="g_range_hint">قيمة الحلقة الخارجية. القيادة اليومية تبقى دون 0.5 G، فالحلقة الأصغر تجعل النقطة تتحرك أكثر.</string>
 </resources>

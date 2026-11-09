@@ -19,8 +19,8 @@ android {
         applicationId = "app.zakhm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.5.4"
+        versionCode = 17
+        versionName = "1.5.5"
 
         val updateUrl = providers.gradleProperty("zakhmUpdateUrl").getOrElse("")
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")

@@ -220,6 +220,11 @@ class CarProfilesTest {
         sim.run(8.0, { CarMotion(accel = 2.5) })
         sim.run(5.0, { CarMotion(accel = -2.0) })
         sim.run(8.0, { CarMotion(accel = 2.0) })
+        // The wrong direction may be thrown away rather than turned; then a steady stretch
+        // finds down again and speeding up and slowing down find forward.
+        sim.run(10.0)
+        sim.run(5.0, { CarMotion(accel = 1.5) })
+        sim.run(5.0, { CarMotion(accel = -1.5) })
         val learned = engine.mountCalibration()!!.forward!!
         assertTrue("forward should be relearned, dot=${learned dot truthForward}", (learned dot truthForward) > 0.98)
     }

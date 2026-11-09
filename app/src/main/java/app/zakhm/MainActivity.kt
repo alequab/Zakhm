@@ -123,6 +123,8 @@ class MainActivity : ComponentActivity() {
     private var scanning by mutableStateOf(false)
     private var needsBluetoothPermission by mutableStateOf(false)
     private var chosenLanguage by mutableStateOf<AppLanguage?>(null)
+    private var gView by mutableStateOf(GView.CAR)
+    private var gRange by mutableStateOf(DEFAULT_G_RANGE)
 
     private val preferences by lazy { getSharedPreferences("settings", Context.MODE_PRIVATE) }
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -156,6 +158,8 @@ class MainActivity : ComponentActivity() {
         rotation = RotationMode.entries.firstOrNull { it.name == preferences.getString(KEY_ROTATION, null) }
             ?: RotationMode.AUTO
         applyRotation()
+        gView = GView.entries.firstOrNull { it.name == preferences.getString(KEY_G_VIEW, null) } ?: GView.CAR
+        gRange = preferences.getFloat(KEY_G_RANGE, DEFAULT_G_RANGE.toFloat()).toDouble().takeIf { it in G_RANGES } ?: DEFAULT_G_RANGE
 
         // Reading this asks a system service, so it can't be done on every frame.
         chosenLanguage = currentLanguage()
@@ -170,7 +174,7 @@ class MainActivity : ComponentActivity() {
             val state by controller.state.collectAsStateWithLifecycle()
             val update by viewModel.update.collectAsStateWithLifecycle()
             // The dashboard redraws many times a second, and none of this changes with it.
-            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage) {
+            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage, gView, gRange) {
                 ScreenSettings(
                     useMph = useMph,
                     rotation = rotation,
@@ -178,6 +182,8 @@ class MainActivity : ComponentActivity() {
                     scanningForAdapters = scanning,
                     needsBluetoothPermission = needsBluetoothPermission,
                     language = chosenLanguage,
+                    gView = gView,
+                    gRange = gRange,
                 )
             }
             TelemetryScreen(state, update, hasPermission, settings, actions)
@@ -210,6 +216,8 @@ class MainActivity : ComponentActivity() {
             shareRecording = ::shareRecording,
             startUpdate = viewModel::startUpdate,
             dismissUpdate = viewModel::dismissUpdate,
+            setGView = ::setGViewMode,
+            setGRange = ::setGRangeChoice,
         )
     }
 
@@ -331,6 +339,16 @@ class MainActivity : ComponentActivity() {
         preferences.edit().putBoolean(KEY_MPH, mph).apply()
     }
 
+    private fun setGViewMode(view: GView) {
+        gView = view
+        preferences.edit().putString(KEY_G_VIEW, view.name).apply()
+    }
+
+    private fun setGRangeChoice(range: Double) {
+        gRange = range
+        preferences.edit().putFloat(KEY_G_RANGE, range.toFloat()).apply()
+    }
+
     private fun setRotationMode(mode: RotationMode) {
         rotation = mode
         preferences.edit().putString(KEY_ROTATION, mode.name).apply()
@@ -371,6 +389,8 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val KEY_MPH = "use_mph"
         const val KEY_ROTATION = "rotation"
+        const val KEY_G_VIEW = "g_view"
+        const val KEY_G_RANGE = "g_range"
         const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
         const val KEY_ASKED_LOCATION = "asked_location"
         const val SCAN_DURATION_MS = 10_000L

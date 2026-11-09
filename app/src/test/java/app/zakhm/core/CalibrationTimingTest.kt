@@ -90,6 +90,45 @@ class CalibrationTimingTest {
     }
 
     @Test
+    fun aSingleSpeedUpDoesNotFinishCalibration() {
+        // On a real drive, forward learned from one speed-up read the braking after it as speeding up.
+        val engine = TelemetryEngine()
+        val sim = DriveSimulator(engine)
+        sim.run(4.0)
+        sim.run(12.0, { CarMotion(accel = 1.2) })
+        assertTrue(
+            "one speed-up mustn't be enough, was ${engine.snapshot().calibration}",
+            engine.snapshot().calibration != CalibrationState.READY,
+        )
+        // Slowing down afterwards gives the other direction.
+        val seconds = secondsUntilReady(engine, sim, 60.0) { CarMotion(accel = -1.0) }
+        println("calibration time after slowing down: $seconds s")
+        assertTrue("slowing down took $seconds s", seconds < 10.0)
+        val dot = engine.mountCalibration()!!.forward!! dot DriveSimulator.MOUNT_TILTED.first
+        assertTrue("forward off, dot=$dot", dot > 0.98)
+    }
+
+    @Test
+    fun aConstantErrorDoesNotTurnForward() {
+        // The phone's sense of "down" a few degrees off adds a constant push that a single
+        // direction can't tell apart from forward. With both, it cancels.
+        val engine = TelemetryEngine()
+        val tilt = Math.toRadians(4.0)
+        val carX = DriveSimulator.MOUNT_TILTED.first
+        val carY = DriveSimulator.MOUNT_TILTED.second
+        val carZ = DriveSimulator.MOUNT_TILTED.third
+        // A mount that sags a little once moving: the phone's axes as seen while driving.
+        val sagged = Triple(carX * kotlin.math.cos(tilt) + carZ * kotlin.math.sin(tilt), carY, carZ * kotlin.math.cos(tilt) - carX * kotlin.math.sin(tilt))
+        val parked = DriveSimulator(engine)
+        parked.run(4.0)
+        val moving = DriveSimulator(engine, sagged.first, sagged.second, sagged.third, startTime = parked.time)
+        secondsUntilReady(engine, moving, 120.0, ::city)
+        assertEquals(CalibrationState.READY, engine.snapshot().calibration)
+        val dot = engine.mountCalibration()!!.forward!! dot sagged.first
+        assertTrue("forward off, dot=$dot", dot > 0.98)
+    }
+
+    @Test
     fun aPhoneBeingHandledIsNotAStoppedCar() {
         val engine = TelemetryEngine()
         val sim = DriveSimulator(engine, idleVibration = 0.0, handling = 0.9)

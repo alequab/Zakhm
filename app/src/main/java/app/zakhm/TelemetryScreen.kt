@@ -117,6 +117,15 @@ enum class AppLanguage(val tag: String, @StringRes val label: Int) {
 
 data class ObdDevice(val name: String, val address: String)
 
+/** Which way the G-force dot moves. */
+enum class GView(@StringRes val label: Int) {
+    /** With the car: speeding up moves it up, a left turn moves it left. */
+    CAR(R.string.g_view_car),
+
+    /** The push felt in the seat: braking moves it up, a left turn moves it right. */
+    DRIVER(R.string.g_view_driver),
+}
+
 data class ScreenSettings(
     val useMph: Boolean,
     val rotation: RotationMode,
@@ -125,7 +134,14 @@ data class ScreenSettings(
     val needsBluetoothPermission: Boolean,
     /** Null where the phone doesn't support choosing a language per app. */
     val language: AppLanguage?,
+    val gView: GView = GView.CAR,
+    /** What the G circle's outer ring stands for, in G. Smaller zooms in. */
+    val gRange: Double = DEFAULT_G_RANGE,
 )
+
+/** The zoom choices for the G circle; road cars rarely pass 1 G. */
+val G_RANGES = listOf(0.5, 1.0, 1.5, 2.0)
+const val DEFAULT_G_RANGE = 1.0
 
 class ScreenActions(
     val requestPermission: () -> Unit,
@@ -152,6 +168,8 @@ class ScreenActions(
     val shareRecording: (File) -> Unit,
     val startUpdate: () -> Unit,
     val dismissUpdate: () -> Unit,
+    val setGView: (GView) -> Unit = {},
+    val setGRange: (Double) -> Unit = {},
 )
 
 
@@ -161,7 +179,9 @@ private val TabularDigits = TextStyle(fontFeatureSettings = "tnum")
 private val PanelShape = RoundedCornerShape(18.dp)
 
 private const val MAX_CAR_NAME_LENGTH = 40
-private const val METER_RANGE_G = 1.0
+
+/** The speed dial's share of the height in portrait, against 1 for the G circle. */
+private const val PORTRAIT_DIAL_WEIGHT = 0.8f
 
 /** Half a meter label's height, so the outer ring passes through the labels' middle. */
 private val METER_LABEL_INSET = 7.dp
@@ -300,7 +320,7 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                 Header(state, settings.useMph) { showSettings = true }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight())
-                    GMeter(s, Modifier.weight(1f).fillMaxHeight())
+                    GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight())
                     Column(
                         Modifier.width(92.dp).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -315,8 +335,10 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
         } else {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Header(state, settings.useMph) { showSettings = true }
-                SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(1f))
-                GMeter(s, Modifier.fillMaxWidth().weight(1f))
+                // The G circle is limited by its panel's height on a phone, while the speed dial
+                // leaves room under its arc, so the circle gets the larger share.
+                SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT))
+                GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f))
                 Row(Modifier.fillMaxWidth().height(60.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxHeight())
                     PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxHeight())
@@ -593,14 +615,16 @@ private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize:
 }
 
 @Composable
-private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
+private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: Modifier) {
     val long = s.longitudinalG
     val lat = s.lateralG
-    val trail = remember { mutableStateListOf<Offset>() }
-    LaunchedEffect(long, lat) {
+    val trail = remember(view, range) { mutableStateListOf<Offset>() }
+    // The push on the driver is the car's acceleration turned around.
+    val sign = if (view == GView.DRIVER) -1.0 else 1.0
+    LaunchedEffect(long, lat, view, range) {
         if (long != null && lat != null) {
-            // Left turns go left and acceleration goes up, matching the labels around the meter.
-            trail.add(meterPoint(lat, long))
+            // The dot sits next to the label for what put it there, in either view.
+            trail.add(meterPoint(sign * lat, sign * long, range))
             if (trail.size > TRAIL_POINTS) trail.removeAt(0)
         } else {
             trail.clear()
@@ -618,10 +642,11 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
                 Canvas(Modifier.fillMaxSize().padding(METER_LABEL_INSET)) {
                     val radius = size.minDimension / 2
                     val center = Offset(size.width / 2, size.height / 2)
-                    listOf(0.25, 0.5, 0.75, 1.0).forEach { g ->
+                    // Four rings, each a quarter of the chosen range.
+                    listOf(0.25, 0.5, 0.75, 1.0).forEach { part ->
                         drawCircle(
-                            if (g == 1.0) colors.secondary.copy(alpha = 0.6f) else colors.track,
-                            (radius * g / METER_RANGE_G).toFloat(),
+                            if (part == 1.0) colors.secondary.copy(alpha = 0.6f) else colors.track,
+                            (radius * part).toFloat(),
                             center,
                             style = Stroke(1.dp.toPx()),
                         )
@@ -639,10 +664,11 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
                     }
                     trail.lastOrNull()?.let { drawCircle(dotColor, 8.dp.toPx(), center + it * radius) }
                 }
-                MeterLabel(R.string.meter_accel, Alignment.TopCenter)
-                MeterLabel(R.string.meter_brake, Alignment.BottomCenter)
-                MeterLabel(R.string.meter_left, Alignment.CenterStart)
-                MeterLabel(R.string.meter_right, Alignment.CenterEnd)
+                val driver = view == GView.DRIVER
+                MeterLabel(if (driver) R.string.meter_brake else R.string.meter_accel, Alignment.TopCenter)
+                MeterLabel(if (driver) R.string.meter_accel else R.string.meter_brake, Alignment.BottomCenter)
+                MeterLabel(if (driver) R.string.meter_right else R.string.meter_left, Alignment.CenterStart)
+                MeterLabel(if (driver) R.string.meter_left else R.string.meter_right, Alignment.CenterEnd)
                 // In the circle's empty middle, so the gauges keep their size when it comes and goes.
                 if (long == null) {
                     Text(
@@ -671,12 +697,21 @@ private fun GMeter(s: TelemetrySnapshot, modifier: Modifier) {
             )
             Text(stringResource(R.string.unit_g), color = Secondary, fontSize = 12.sp, letterSpacing = 2.sp)
         }
+        // What the outer ring stands for, as it changes with the zoom.
+        Text(
+            stringResource(R.string.g_range_ring, formatRange(range)),
+            Modifier.align(Alignment.BottomStart).padding(6.dp),
+            color = Secondary,
+            fontSize = 11.sp,
+        )
     }
 }
 
-private fun meterPoint(lateralG: Double, longitudinalG: Double): Offset {
-    var x = -lateralG / METER_RANGE_G
-    var y = -longitudinalG / METER_RANGE_G
+private fun formatRange(range: Double) = if (range % 1.0 == 0.0) range.toInt().toString() else "%.1f".format(Locale.US, range)
+
+private fun meterPoint(lateralG: Double, longitudinalG: Double, range: Double): Offset {
+    var x = -lateralG / range
+    var y = -longitudinalG / range
     val distance = hypot(x, y)
     if (distance > 1.0) {
         x /= distance
@@ -770,6 +805,14 @@ private fun SettingsSheet(
 
             SectionTitle(R.string.section_screen)
             ChoiceRow(RotationMode.entries.map { it to stringResource(it.label) }, settings.rotation, actions.setRotation)
+
+            SectionTitle(R.string.section_g_view)
+            ChoiceRow(GView.entries.map { it to stringResource(it.label) }, settings.gView, actions.setGView)
+            Hint(stringResource(R.string.g_view_hint))
+
+            SectionTitle(R.string.section_g_range)
+            ChoiceRow(G_RANGES.map { it to stringResource(R.string.g_range_choice, formatRange(it)) }, settings.gRange, actions.setGRange)
+            Hint(stringResource(R.string.g_range_hint))
 
             settings.language?.let { language ->
                 SectionTitle(R.string.section_language)

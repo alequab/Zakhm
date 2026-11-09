@@ -100,9 +100,23 @@ class ScreenRenderTest {
         dismissUpdate = {},
     )
 
-    private fun show(state: TelemetryUiState) {
-        compose.setContent { TelemetryScreen(state, UpdateState.None, true, settings, actions) }
+    private fun show(state: TelemetryUiState, screenSettings: ScreenSettings = settings) {
+        compose.setContent { TelemetryScreen(state, UpdateState.None, true, screenSettings, actions) }
         compose.waitForIdle()
+    }
+
+    /** The owner's phone, a moto g52: 1080 x 2400 pixels at 400 dpi. */
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun ownersPhone() {
+        show(state())
+        save("portrait-moto-g52")
+    }
+
+    @Test
+    fun driverViewZoomedIn() {
+        show(state(), settings.copy(gView = GView.DRIVER, gRange = 0.5))
+        save("g-driver-zoom")
     }
 
     private fun save(name: String) {

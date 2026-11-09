@@ -51,7 +51,7 @@
 <table>
 <tr>
 <td width="50%" valign="top"><b>السرعة</b><br>بالكيلومتر أو الميل في الساعة، بدمج GPS مع مقياس التسارع لتقليل التأخير.</td>
-<td width="50%" valign="top"><b>مقياس G</b><br>يفصل بين التسارع والفرملة والانعطاف، مع أعلى القيم لكل اتجاه.</td>
+<td width="50%" valign="top"><b>مقياس G</b><br>يفصل بين التسارع والفرملة والانعطاف، مع أعلى القيم لكل اتجاه. اعرضه كحركة السيارة أو كما يشعر به السائق، وكبّر الدائرة حتى 0.5 G.</td>
 </tr>
 <tr>
 <td valign="top"><b>مصدر السرعة</b><br>GPS الهاتف أو محوّل OBD-II أو Android Auto، مع التحول إلى GPS إذا توقف مصدر السيارة.</td>
@@ -95,7 +95,7 @@
 
 1. ثبّت الهاتف جيدًا في حامل والسيارة متوقفة، واتركه ثابتًا بضع ثوانٍ.
 2. انتظر في الخارج حتى تختفي رسالة GPS.
-3. قُد بشكل طبيعي، فتختفي رسالة المعايرة بعد تغييرات قليلة في السرعة أو بعض المنعطفات.
+3. قُد بشكل طبيعي، فتختفي رسالة المعايرة بعد أن تسرّع ثم تبطئ قليلًا، أو تنعطف يمينًا ويسارًا.
 
 إذا حرّكت الهاتف داخل الحامل، فسيعيد التطبيق المعايرة غالبًا من تلقاء نفسه. ويمكنك أيضًا الضغط على أيقونة الإعدادات ثم **معايرة**.
 
@@ -209,7 +209,7 @@ flowchart LR
 <table>
 <tr>
 <td width="50%" valign="top"><b>Speed</b><br>In km/h or mph, combining GPS with the accelerometer to reduce lag.</td>
-<td width="50%" valign="top"><b>G-force meter</b><br>Separates acceleration, braking and cornering, with peak values for each direction.</td>
+<td width="50%" valign="top"><b>G-force meter</b><br>Separates acceleration, braking and cornering, with peak values for each direction. Show it as the car's movement or as felt by the driver, and zoom the circle down to 0.5 G.</td>
 </tr>
 <tr>
 <td valign="top"><b>Speed source</b><br>Phone GPS, an OBD-II adapter or Android Auto, switching to GPS if a car source stops.</td>
@@ -253,7 +253,7 @@ flowchart LR
 
 1. Fix the phone firmly in a mount while the car is parked, and keep it still for a few seconds.
 2. Wait outside until the GPS message clears.
-3. Drive normally. The calibration message clears after a few speed changes or turns.
+3. Drive normally. The calibration message clears once you've sped up and slowed down a little, or turned both ways.
 
 If you move the phone in its mount, the app will usually calibrate again by itself. You can also tap the settings icon, then **Calibrate**.
 
