@@ -24,6 +24,9 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.zakhm.core.CalibrationState
 import app.zakhm.core.CarProfile
@@ -111,6 +114,50 @@ class ScreenRenderTest {
     fun ownersPhone() {
         show(state())
         save("portrait-moto-g52")
+    }
+
+    private fun hasClickLabel(label: String) =
+        SemanticsMatcher("tap label \"$label\"") { it.config.getOrNull(SemanticsActions.OnClick)?.label == label }
+
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun speedFullScreen() {
+        compose.setContent { TelemetryScreen(state(), UpdateState.None, true, settings, actions, startFocus = Focus.SPEED) }
+        save("focus-speed")
+    }
+
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun gFullScreen() {
+        compose.setContent { TelemetryScreen(state(), UpdateState.None, true, settings.copy(gView = GView.DRIVER, gRange = 1.5), actions, startFocus = Focus.G) }
+        save("focus-g")
+    }
+
+    @Test
+    @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
+    fun gFullScreenLandscape() {
+        compose.setContent { TelemetryScreen(state(), UpdateState.None, true, settings, actions, startFocus = Focus.G) }
+        save("focus-g-landscape")
+    }
+
+    @Test
+    fun tappingAnInstrumentFillsTheScreenAndTappingAgainComesBack() {
+        show(state())
+        compose.onNodeWithText("KM/H").assertExists()
+        compose.onAllNodes(hasClickLabel("Show full screen"))[1].performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("KM/H").assertDoesNotExist()
+        compose.onNode(hasClickLabel("Show both again")).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("KM/H").assertExists()
+    }
+
+    /** The owner's settings: felt by driver, ring at 1.5 G. */
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun ownersPhoneDriverView() {
+        show(state(), settings.copy(gView = GView.DRIVER, gRange = 1.5))
+        save("portrait-moto-g52-driver-1.5")
     }
 
     @Test

@@ -5,7 +5,9 @@ import android.view.View
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -180,11 +182,14 @@ private val PanelShape = RoundedCornerShape(18.dp)
 
 private const val MAX_CAR_NAME_LENGTH = 40
 
+/** How many font sizes wide three bold tabular digits are, with a little room spare. */
+private const val BIG_SPEED_DIGIT_WIDTHS = 1.85f
+
 /** The speed dial's share of the height in portrait, against 1 for the G circle. */
 private const val PORTRAIT_DIAL_WEIGHT = 0.8f
 
 /** Half a meter label's height, so the outer ring passes through the labels' middle. */
-private val METER_LABEL_INSET = 7.dp
+private val METER_LABEL_INSET = 8.dp
 private const val HIGH_G = 0.6
 private const val TRAIL_POINTS = 40
 private const val GAUGE_START_DEGREES = 135f
@@ -217,6 +222,8 @@ fun TelemetryScreen(
     hasPermission: Boolean,
     settings: ScreenSettings,
     actions: ScreenActions,
+    /** An instrument to start with full screen, for previews and tests. */
+    startFocus: Focus? = null,
 ) {
     val theme = state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT
     DashTheme(theme) {
@@ -241,7 +248,7 @@ fun TelemetryScreen(
             Column {
                 if (update != UpdateState.None) UpdateBanner(update, actions)
                 if (hasPermission) {
-                    Dashboard(state, settings, actions)
+                    Dashboard(state, settings, actions, startFocus)
                 } else {
                     PermissionPrompt(actions.requestPermission)
                 }
@@ -305,45 +312,57 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
     }
 }
 
+/** One instrument filling the screen. */
+enum class Focus { SPEED, G }
+
 @Composable
-private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions: ScreenActions) {
+private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions: ScreenActions, startFocus: Focus? = null) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var focus by rememberSaveable { mutableStateOf(startFocus) }
     val s = state.snapshot
+    // The back gesture leaves the full-screen view before it leaves the app.
+    BackHandler(enabled = focus != null) { focus = null }
+
+    // Tapping an instrument fills the screen with it; tapping again brings both back.
+    @Composable
+    fun tapToFocus(target: Focus) = Modifier.clickable(
+        onClickLabel = stringResource(if (focus == target) R.string.focus_back else R.string.focus_full),
+        role = Role.Button,
+    ) { focus = if (focus == target) null else target }
 
     // These are instruments with fixed room, so very large system text would only clip them.
     val density = LocalDensity.current
     val instrumentDensity = remember(density) { Density(density.density, min(density.fontScale, MAX_INSTRUMENT_FONT_SCALE)) }
     CompositionLocalProvider(LocalDensity provides instrumentDensity) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth > maxHeight) {
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Header(state, settings.useMph) { showSettings = true }
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight())
-                    GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight())
-                    Column(
-                        Modifier.width(92.dp).fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxWidth())
-                        PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxWidth())
-                        PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxWidth())
-                        PeakTile(R.string.peak_right, s.peaks.right, Modifier.weight(1f).fillMaxWidth())
+        val landscape = maxWidth > maxHeight
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Full screen gives the status row's room to the instrument too.
+            if (focus == null) Header(state, settings.useMph) { showSettings = true }
+            when {
+                focus == Focus.SPEED ->
+                    BigSpeed(s, settings.useMph, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.SPEED)))
+                focus == Focus.G && landscape ->
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)), large = true)
+                        PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
                     }
+                focus == Focus.G -> {
+                    GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)), large = true)
+                    PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
                 }
-            }
-        } else {
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Header(state, settings.useMph) { showSettings = true }
-                // The G circle is limited by its panel's height on a phone, while the speed dial
-                // leaves room under its arc, so the circle gets the larger share.
-                SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT))
-                GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f))
-                Row(Modifier.fillMaxWidth().height(60.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxHeight())
-                    PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxHeight())
-                    PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxHeight())
-                    PeakTile(R.string.peak_right, s.peaks.right, Modifier.weight(1f).fillMaxHeight())
+                landscape ->
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.SPEED)))
+                        GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)))
+                        PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
+                    }
+                else -> {
+                    // The G circle is limited by its panel's height on a phone, while the speed dial
+                    // leaves room under its arc, so the circle gets the larger share.
+                    SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT).then(tapToFocus(Focus.SPEED)))
+                    GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)))
+                    PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
                 }
             }
         }
@@ -599,7 +618,7 @@ private class GaugeTick(
 )
 
 @Composable
-private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize: TextUnit, unit: String) {
+private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize: TextUnit, unit: String, unitSize: TextUnit = 13.sp) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value?.takeIf { it.isFinite() }?.roundToInt()?.toString() ?: "--",
@@ -610,12 +629,49 @@ private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize:
             style = TabularDigits,
             maxLines = 1,
         )
-        Text(unit.uppercase(Locale.US), color = Secondary, fontSize = 13.sp, letterSpacing = labelSpacing(2.sp))
+        Text(unit.uppercase(Locale.US), color = Secondary, fontSize = unitSize, letterSpacing = labelSpacing(2.sp))
+    }
+}
+
+/**
+ * The speed alone, as big as the screen allows: a dial can never be wider than the
+ * phone, but a number can grow into the height too. A bar underneath keeps the sense
+ * of how far along the scale it is.
+ */
+@Composable
+private fun BigSpeed(s: TelemetrySnapshot, useMph: Boolean, modifier: Modifier) {
+    val maxSpeed = if (useMph) 160 else 240
+    val displayed = s.speedMps?.takeIf { it.isFinite() }?.let { it * unitFactor(useMph) }
+    val colors = LocalDash.current
+    val valueColor = when (s.speedSource) {
+        SpeedSource.ESTIMATED -> colors.accent
+        SpeedSource.ACQUIRING, SpeedSource.NO_SIGNAL -> colors.secondary
+        SpeedSource.LIVE, SpeedSource.STOPPED -> colors.primary
+    }
+    val fraction = ((displayed ?: 0.0) / maxSpeed).coerceIn(0.0, 1.0).toFloat()
+    BoxWithConstraints(modifier.panel().padding(16.dp), contentAlignment = Alignment.Center) {
+        // Three bold digits must fit across, and leave room under them for the unit and bar.
+        val sizeDp = min(maxWidth.value / BIG_SPEED_DIGIT_WIDTHS, maxHeight.value * 0.55f)
+        val density = LocalDensity.current
+        val big = with(density) { sizeDp.dp.toSp() }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            SpeedNumber(displayed, valueColor, big, big * 0.5f, unitLabel(useMph), unitSize = 20.sp)
+            Spacer(Modifier.height(20.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(colors.track),
+            ) {
+                Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(colors.accent))
+            }
+        }
     }
 }
 
 @Composable
-private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: Modifier) {
+private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: Modifier, large: Boolean = false) {
     val long = s.longitudinalG
     val lat = s.lateralG
     val trail = remember(view, range) { mutableStateListOf<Offset>() }
@@ -633,6 +689,8 @@ private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: M
     val total = s.totalG ?: 0.0
     val colors = LocalDash.current
     val dotColor = if (total >= HIGH_G) colors.alert else colors.accent
+    val measurer = rememberTextMeasurer()
+    val ringLabelStyle = TextStyle(color = colors.secondary, fontSize = 11.sp)
 
     Box(modifier.panel().padding(2.dp), contentAlignment = Alignment.Center) {
         // Left and right here are the car's real directions, so they never mirror for Arabic.
@@ -642,17 +700,32 @@ private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: M
                 Canvas(Modifier.fillMaxSize().padding(METER_LABEL_INSET)) {
                     val radius = size.minDimension / 2
                     val center = Offset(size.width / 2, size.height / 2)
-                    // Four rings, each a quarter of the chosen range.
-                    listOf(0.25, 0.5, 0.75, 1.0).forEach { part ->
+                    // Rings on round values, so each can say what it stands for.
+                    val rings = ringValues(range)
+                    rings.forEach { g ->
                         drawCircle(
-                            if (part == 1.0) colors.secondary.copy(alpha = 0.6f) else colors.track,
-                            (radius * part).toFloat(),
+                            if (g == rings.last()) colors.secondary.copy(alpha = 0.6f) else colors.track,
+                            (radius * g / range).toFloat(),
                             center,
                             style = Stroke(1.dp.toPx()),
                         )
                     }
                     drawLine(colors.track, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), 1.dp.toPx())
                     drawLine(colors.track, Offset(center.x, center.y - radius), Offset(center.x, center.y + radius), 1.dp.toPx())
+                    // Each ring's value where it crosses the upper-right diagonal, clear of the axis labels.
+                    val diagonal = Offset(0.7071f, -0.7071f)
+                    val pad = 2.dp.toPx()
+                    rings.forEach { g ->
+                        val text = measurer.measure(formatRange(g), ringLabelStyle)
+                        val at = center + diagonal * (radius * g / range).toFloat()
+                        val topLeft = Offset(at.x - text.size.width / 2f, at.y - text.size.height / 2f)
+                        drawRect(
+                            colors.panel,
+                            topLeft - Offset(pad, 0f),
+                            Size(text.size.width + 2 * pad, text.size.height.toFloat()),
+                        )
+                        drawText(text, topLeft = topLeft)
+                    }
 
                     trail.forEachIndexed { i, point ->
                         val age = (i + 1f) / trail.size
@@ -688,26 +761,33 @@ private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: M
             }
         }
         Column(Modifier.align(Alignment.TopStart).padding(6.dp)) {
+            // Full screen has room above the circle for a number readable at a glance.
             Text(
                 formatG(s.totalG),
                 color = Primary,
-                fontSize = 26.sp,
+                fontSize = if (large) 56.sp else 26.sp,
                 fontWeight = FontWeight.Bold,
                 style = TabularDigits,
             )
-            Text(stringResource(R.string.unit_g), color = Secondary, fontSize = 12.sp, letterSpacing = 2.sp)
+            Text(stringResource(R.string.unit_g), color = Secondary, fontSize = if (large) 16.sp else 12.sp, letterSpacing = 2.sp)
         }
-        // What the outer ring stands for, as it changes with the zoom.
-        Text(
-            stringResource(R.string.g_range_ring, formatRange(range)),
-            Modifier.align(Alignment.BottomStart).padding(6.dp),
-            color = Secondary,
-            fontSize = 11.sp,
-        )
     }
 }
 
-private fun formatRange(range: Double) = if (range % 1.0 == 0.0) range.toInt().toString() else "%.1f".format(Locale.US, range)
+/** Round ring values for a zoom: steps of 0.1, 0.25 or 0.5 G, ending at the outer ring. */
+private fun ringValues(range: Double): List<Double> {
+    val step = when {
+        range <= 0.5 -> 0.1
+        range <= 1.0 -> 0.25
+        else -> 0.5
+    }
+    val count = Math.round(range / step).toInt()
+    return (1..count).map { Math.round(it * step * 100) / 100.0 }
+}
+
+/** 0.1, 0.25, 0.5, 1, 1.5: as short as the value allows. */
+private fun formatRange(range: Double): String =
+    java.math.BigDecimal.valueOf(range).stripTrailingZeros().toPlainString()
 
 private fun meterPoint(lateralG: Double, longitudinalG: Double, range: Double): Offset {
     var x = -lateralG / range
@@ -725,11 +805,33 @@ private fun BoxScope.MeterLabel(@StringRes text: Int, alignment: Alignment) {
     Text(
         stringResource(text),
         // Sits on the outer ring, so it needs a clean gap in the line to stay readable.
-        Modifier.align(alignment).background(Panel).padding(horizontal = 3.dp),
+        Modifier.align(alignment).background(Panel).padding(horizontal = 4.dp),
         color = Secondary,
-        fontSize = 10.sp,
+        // Read at a glance from the driver's seat.
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
         letterSpacing = labelSpacing(1.sp),
     )
+}
+
+@Composable
+private fun PeakRow(s: TelemetrySnapshot, modifier: Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxHeight())
+        PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxHeight())
+        PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxHeight())
+        PeakTile(R.string.peak_right, s.peaks.right, Modifier.weight(1f).fillMaxHeight())
+    }
+}
+
+@Composable
+private fun PeakColumn(s: TelemetrySnapshot, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        PeakTile(R.string.peak_accel, s.peaks.accel, Modifier.weight(1f).fillMaxWidth())
+        PeakTile(R.string.peak_brake, s.peaks.brake, Modifier.weight(1f).fillMaxWidth())
+        PeakTile(R.string.peak_left, s.peaks.left, Modifier.weight(1f).fillMaxWidth())
+        PeakTile(R.string.peak_right, s.peaks.right, Modifier.weight(1f).fillMaxWidth())
+    }
 }
 
 @Composable
@@ -809,6 +911,7 @@ private fun SettingsSheet(
             SectionTitle(R.string.section_g_view)
             ChoiceRow(GView.entries.map { it to stringResource(it.label) }, settings.gView, actions.setGView)
             Hint(stringResource(R.string.g_view_hint))
+            Hint(stringResource(R.string.focus_hint))
 
             SectionTitle(R.string.section_g_range)
             ChoiceRow(G_RANGES.map { it to stringResource(R.string.g_range_choice, formatRange(it)) }, settings.gRange, actions.setGRange)

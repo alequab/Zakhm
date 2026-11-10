@@ -157,4 +157,7 @@
     <string name="g_range_choice">%1$s G</string>
     <string name="g_range_ring">Ring %1$s G</string>
     <string name="g_range_hint">What the outer ring stands for. Everyday driving stays under 0.5 G, so a smaller ring makes the dot move more.</string>
+    <string name="focus_full">Show full screen</string>
+    <string name="focus_back">Show both again</string>
+    <string name="focus_hint">Tap the speed gauge or the G circle to fill the screen with it. Tap again, or go back, to see both.</string>
 </resources>

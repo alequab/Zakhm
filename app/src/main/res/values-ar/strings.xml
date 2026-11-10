@@ -157,4 +157,7 @@
     <string name="g_range_choice">%1$s G</string>
     <string name="g_range_ring">الحلقة %1$s G</string>
     <string name="g_range_hint">قيمة الحلقة الخارجية. القيادة اليومية تبقى دون 0.5 G، فالحلقة الأصغر تجعل النقطة تتحرك أكثر.</string>
+    <string name="focus_full">ملء الشاشة</string>
+    <string name="focus_back">عرض الاثنين معًا</string>
+    <string name="focus_hint">اضغط على عداد السرعة أو دائرة G لتملأ الشاشة. اضغط مرة أخرى أو ارجع لترى الاثنين.</string>
 </resources>
