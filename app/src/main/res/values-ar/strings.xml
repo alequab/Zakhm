@@ -146,7 +146,24 @@
     <string name="recording_error_trip">تعذّر حفظ الرحلة للخريطة</string>
 
     <string name="section_drives">الرحلات المحفوظة</string>
-    <string name="drives_hint">كل رحلة تسجّلها تُحفظ هنا بمسارها وسرعتها وقوة G. افتحها بصيغة KML في Google Earth لترى المسار ملوّنًا حسب السرعة مع علامات عند الدفعات القوية، أو بصيغة GPX في أغلب تطبيقات الخرائط. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
+    <string name="group_guide">طريقة استخدام زخم</string>
+    <string name="group_guide_summary">خمس خطوات قصيرة</string>
+    <string name="group_display">العرض</string>
+    <string name="group_g">قوة G</string>
+    <string name="group_drives">الرحلات</string>
+    <string name="group_open">مفتوح</string>
+    <string name="group_closed">مغلق</string>
+    <string name="drives_count">المحفوظة: %1$d</string>
+    <string name="drives_recording">جارٍ التسجيل…</string>
+    <string name="tools_summary">معايرة، تصفير أعلى القيم</string>
+    <string name="tools_hint">المعايرة تجعل التطبيق يتعلّم وضع الهاتف من جديد، وهو يفعل ذلك بنفسه عادةً. وتصفير أعلى القيم يمسح أعلى قيم G لهذه السيارة.</string>
+    <string name="guide_step_mount">ثبّت الهاتف في حامل. تصلح أي زاوية ما دام لا يتحرك.</string>
+    <string name="guide_step_source">اختر مصدر السرعة من قسم مصدر السرعة. GPS الهاتف لا يحتاج إلى شيء إضافي.</string>
+    <string name="guide_step_drive">قُد السيارة. تظهر السرعة فورًا، وتظهر قوة G بعد أن يشعر التطبيق بتسارع السيارة وفرملتها وانعطافها، خلال نصف دقيقة غالبًا.</string>
+    <string name="guide_step_focus">اضغط على عداد السرعة أو دائرة G ليملأ الشاشة. اضغط مرة أخرى لترى الاثنين.</string>
+    <string name="guide_step_record">لحفظ رحلة، افتح قسم الرحلات واضغط تسجيل الرحلة، ثم أوقف التسجيل عند الوصول. افتحها من الرحلات المحفوظة بصيغة KML في Google Earth أو بصيغة GPX في تطبيقات الخرائط الأخرى.</string>
+    <string name="guide_note">إذا أمسكت الهاتف أو حرّكته، تتوقف قراءة قوة G ثم تعود بنفسها.</string>
+    <string name="drives_hint">كل رحلة تسجّلها تُحفظ هنا بمسارها وسرعتها وقوة G. افتحها بصيغة KML في Google Earth لترى المسار ملوّنًا حسب السرعة مع علامات عند الدفعات القوية، وتعيد تشغيلها على شريط الزمن وتحلّق معها، أو بصيغة GPX في أغلب تطبيقات الخرائط. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
     <string name="drives_none">لا توجد رحلات بعد.</string>
     <string name="drives_show_all">عرض الكل (%1$d)</string>
     <string name="drive_minutes">%1$d د</string>
@@ -168,6 +185,16 @@
     <string name="trip_braking">فرملة</string>
     <string name="trip_left">انعطاف يسارًا</string>
     <string name="trip_right">انعطاف يمينًا</string>
+    <string name="trip_fact_date">التاريخ</string>
+    <string name="trip_fact_duration">المدة</string>
+    <string name="trip_fact_distance">المسافة</string>
+    <string name="trip_fact_strongest_g">أقوى قوة G</string>
+    <string name="trip_fact_time">الوقت</string>
+    <string name="trip_forward_g">قوة G الأمامية</string>
+    <string name="trip_side_g">قوة G الجانبية</string>
+    <string name="trip_drive_folder">الرحلة</string>
+    <string name="trip_tour">التحليق مع الرحلة</string>
+    <string name="trip_timeline">السيارة على شريط الزمن</string>
 
     <string name="auto_needs_permission">يحتاج التطبيق إلى إذن لقراءة سرعة هذه السيارة. توقف ثم اسمح بذلك.</string>
     <string name="auto_sending">تُرسل سرعة السيارة إلى هاتفك. أبقِ التطبيق مفتوحًا على الهاتف لرؤيتها.</string>

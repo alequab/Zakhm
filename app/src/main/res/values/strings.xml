@@ -146,7 +146,24 @@
     <string name="recording_error_trip">Could not save the drive for the map</string>
 
     <string name="section_drives">Saved drives</string>
-    <string name="drives_hint">Each drive you record is saved here with its path, speed and G-force. Open it as KML in Google Earth to see the path coloured by speed with the hard pushes marked, or as GPX in almost any map app. Drives stay on this phone until you share one.</string>
+    <string name="group_guide">How to use Zakhm</string>
+    <string name="group_guide_summary">Five short steps</string>
+    <string name="group_display">Display</string>
+    <string name="group_g">G-force</string>
+    <string name="group_drives">Drives</string>
+    <string name="group_open">Open</string>
+    <string name="group_closed">Closed</string>
+    <string name="drives_count">%1$d saved</string>
+    <string name="drives_recording">Recording…</string>
+    <string name="tools_summary">Calibrate, reset peaks</string>
+    <string name="tools_hint">Calibrate makes the app learn the phone\'s position again; it normally does this by itself. Reset peaks clears the highest G values for this car.</string>
+    <string name="guide_step_mount">Fix the phone in a mount. Any angle works, as long as it doesn\'t move.</string>
+    <string name="guide_step_source">Choose where speed comes from under Speed source. Phone GPS needs nothing extra.</string>
+    <string name="guide_step_drive">Drive. Speed shows straight away. G-force appears after the app has felt the car speed up, brake and turn, usually within half a minute.</string>
+    <string name="guide_step_focus">Tap the speed gauge or the G circle to fill the screen with it. Tap again to see both.</string>
+    <string name="guide_step_record">To keep a drive, open Drives and tap Record drive, then stop when you arrive. Open it from Saved drives as KML in Google Earth, or as GPX in other map apps.</string>
+    <string name="guide_note">If you pick up or move the phone, G-force pauses and comes back by itself.</string>
+    <string name="drives_hint">Each drive you record is saved here with its path, speed and G-force. Open it as KML in Google Earth to see the path coloured by speed with the hard pushes marked, play it back on the time slider and fly along it, or as GPX in almost any map app. Drives stay on this phone until you share one.</string>
     <string name="drives_none">No drives yet.</string>
     <string name="drives_show_all">Show all (%1$d)</string>
     <string name="drive_kml" translatable="false">KML</string>
@@ -170,6 +187,16 @@
     <string name="trip_braking">Braking</string>
     <string name="trip_left">Left turn</string>
     <string name="trip_right">Right turn</string>
+    <string name="trip_fact_date">Date</string>
+    <string name="trip_fact_duration">Duration</string>
+    <string name="trip_fact_distance">Distance</string>
+    <string name="trip_fact_strongest_g">Strongest G-force</string>
+    <string name="trip_fact_time">Time</string>
+    <string name="trip_forward_g">Forward G</string>
+    <string name="trip_side_g">Sideways G</string>
+    <string name="trip_drive_folder">Drive</string>
+    <string name="trip_tour">Fly along the drive</string>
+    <string name="trip_timeline">Car on the timeline</string>
 
     <string name="auto_needs_permission">This app needs permission to read this car\'s speed. Park, then allow it.</string>
     <string name="auto_sending">Sending car speed to your phone. Keep the app open on the phone to see it.</string>

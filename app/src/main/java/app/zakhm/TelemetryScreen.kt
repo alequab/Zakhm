@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -79,6 +80,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -938,80 +940,182 @@ private fun SettingsSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            CarSettings(state, actions)
+            SettingsContent(state, settings, actions)
+        }
+    }
+}
 
-            ThemeSettings(
-                state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT,
-                actions.setTheme,
+private enum class SettingsGroup { GUIDE, CAR, SOURCE, DISPLAY, G_FORCE, DRIVES, TOOLS }
+
+private val GUIDE_STEPS = listOf(
+    R.string.guide_step_mount,
+    R.string.guide_step_source,
+    R.string.guide_step_drive,
+    R.string.guide_step_focus,
+    R.string.guide_step_record,
+)
+
+/**
+ * Everything in settings, as groups that open one at a time. Closed, each shows what
+ * it's set to, so the whole of settings fits on one screen and most visits need no opening.
+ */
+@Composable
+internal fun SettingsContent(
+    state: TelemetryUiState,
+    settings: ScreenSettings,
+    actions: ScreenActions,
+    /** A group to start with open, for previews and tests. */
+    startOpen: String? = null,
+) {
+    var open by rememberSaveable { mutableStateOf(startOpen) }
+
+    @Composable
+    fun group(group: SettingsGroup, @StringRes title: Int, summary: String, content: @Composable ColumnScope.() -> Unit) {
+        SettingsGroupRow(title, summary, open == group.name, { open = if (open == group.name) null else group.name }, content)
+    }
+
+    group(SettingsGroup.GUIDE, R.string.group_guide, stringResource(R.string.group_guide_summary)) {
+        GUIDE_STEPS.forEachIndexed { index, step -> GuideStep(index + 1, stringResource(step)) }
+        Hint(stringResource(R.string.guide_note))
+    }
+
+    val activeCar = state.cars.firstOrNull { it.id == state.activeCarId }
+    group(SettingsGroup.CAR, R.string.section_car, activeCar?.let { carName(it) }.orEmpty()) {
+        CarSettings(state, actions)
+        ThemeSettings(activeCar?.theme ?: CarTheme.DEFAULT, actions.setTheme)
+    }
+
+    val sources = listOf(
+        SpeedInput.PHONE to stringResource(R.string.source_phone),
+        SpeedInput.OBD to stringResource(R.string.source_obd),
+        SpeedInput.ANDROID_AUTO to stringResource(R.string.source_auto),
+    )
+    group(SettingsGroup.SOURCE, R.string.section_source, sources.first { it.first == state.selectedInput }.second) {
+        ChoiceRow(sources, state.selectedInput, actions.selectInput)
+        when (state.selectedInput) {
+            SpeedInput.PHONE -> Hint(stringResource(R.string.source_hint_phone))
+            SpeedInput.OBD -> ObdSettings(state, settings, actions)
+            SpeedInput.ANDROID_AUTO -> Hint(stringResource(R.string.source_hint_auto))
+        }
+        Hint(stringResource(R.string.source_hint_general))
+    }
+
+    val unit = stringResource(if (settings.useMph) R.string.unit_mph else R.string.unit_kmh)
+    group(SettingsGroup.DISPLAY, R.string.group_display, "$unit · ${stringResource(settings.rotation.label)}") {
+        SectionTitle(R.string.section_units)
+        ChoiceRow(
+            listOf(false to stringResource(R.string.unit_kmh), true to stringResource(R.string.unit_mph)),
+            settings.useMph,
+            actions.setUseMph,
+        )
+        SectionTitle(R.string.section_screen)
+        ChoiceRow(RotationMode.entries.map { it to stringResource(it.label) }, settings.rotation, actions.setRotation)
+        settings.language?.let { language ->
+            SectionTitle(R.string.section_language)
+            ChoiceRow(AppLanguage.entries.map { it to stringResource(it.label) }, language, actions.setLanguage)
+        }
+    }
+
+    val range = stringResource(R.string.g_range_choice, formatRange(settings.gRange))
+    group(SettingsGroup.G_FORCE, R.string.group_g, "${stringResource(settings.gView.label)} · $range") {
+        SectionTitle(R.string.section_g_view)
+        ChoiceRow(GView.entries.map { it to stringResource(it.label) }, settings.gView, actions.setGView)
+        Hint(stringResource(R.string.g_view_hint))
+        SectionTitle(R.string.section_g_range)
+        ChoiceRow(G_RANGES.map { it to stringResource(R.string.g_range_choice, formatRange(it)) }, settings.gRange, actions.setGRange)
+        Hint(stringResource(R.string.g_range_hint))
+        Hint(stringResource(R.string.focus_hint))
+    }
+
+    val drives = if (state.recording) {
+        stringResource(R.string.drives_recording)
+    } else {
+        stringResource(R.string.drives_count, state.trips.size)
+    }
+    group(SettingsGroup.DRIVES, R.string.group_drives, drives) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactButton(
+                stringResource(if (state.recording) R.string.tool_stop_recording else R.string.tool_record),
+                actions.toggleRecording,
+                Modifier.weight(1f),
             )
-
-            SectionTitle(R.string.section_source)
-            ChoiceRow(
-                listOf(
-                    SpeedInput.PHONE to stringResource(R.string.source_phone),
-                    SpeedInput.OBD to stringResource(R.string.source_obd),
-                    SpeedInput.ANDROID_AUTO to stringResource(R.string.source_auto),
-                ),
-                state.selectedInput,
-                actions.selectInput,
-            )
-            when (state.selectedInput) {
-                SpeedInput.PHONE -> Hint(stringResource(R.string.source_hint_phone))
-                SpeedInput.OBD -> ObdSettings(state, settings, actions)
-                SpeedInput.ANDROID_AUTO -> Hint(stringResource(R.string.source_hint_auto))
-            }
-            Hint(stringResource(R.string.source_hint_general))
-
-            SectionTitle(R.string.section_units)
-            ChoiceRow(
-                listOf(false to stringResource(R.string.unit_kmh), true to stringResource(R.string.unit_mph)),
-                settings.useMph,
-                actions.setUseMph,
-            )
-
-            SectionTitle(R.string.section_screen)
-            ChoiceRow(RotationMode.entries.map { it to stringResource(it.label) }, settings.rotation, actions.setRotation)
-
-            SectionTitle(R.string.section_g_view)
-            ChoiceRow(GView.entries.map { it to stringResource(it.label) }, settings.gView, actions.setGView)
-            Hint(stringResource(R.string.g_view_hint))
-            Hint(stringResource(R.string.focus_hint))
-
-            SectionTitle(R.string.section_g_range)
-            ChoiceRow(G_RANGES.map { it to stringResource(R.string.g_range_choice, formatRange(it)) }, settings.gRange, actions.setGRange)
-            Hint(stringResource(R.string.g_range_hint))
-
-            settings.language?.let { language ->
-                SectionTitle(R.string.section_language)
-                ChoiceRow(AppLanguage.entries.map { it to stringResource(it.label) }, language, actions.setLanguage)
-            }
-
-            SectionTitle(R.string.section_tools)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton(stringResource(R.string.tool_calibrate), actions.calibrate, Modifier.weight(1f))
-                CompactButton(stringResource(R.string.tool_reset_peaks), actions.resetPeaks, Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val file = state.lastRecording
+            if (file != null && !state.recording) {
                 CompactButton(
-                    stringResource(if (state.recording) R.string.tool_stop_recording else R.string.tool_record),
-                    actions.toggleRecording,
+                    stringResource(R.string.tool_share_recording),
+                    { actions.shareRecording(file) },
                     Modifier.weight(1f),
                 )
-                val file = state.lastRecording
-                if (file != null && !state.recording) {
-                    CompactButton(
-                        stringResource(R.string.tool_share_recording),
-                        { actions.shareRecording(file) },
-                        Modifier.weight(1f),
-                    )
+            }
+        }
+        state.recordingError?.let { Text(it, color = Alert, fontSize = DashType.Label) }
+        TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip)
+    }
+
+    group(SettingsGroup.TOOLS, R.string.section_tools, stringResource(R.string.tools_summary)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactButton(stringResource(R.string.tool_calibrate), actions.calibrate, Modifier.weight(1f))
+            CompactButton(stringResource(R.string.tool_reset_peaks), actions.resetPeaks, Modifier.weight(1f))
+        }
+        Hint(stringResource(R.string.tools_hint))
+    }
+}
+
+/** One group's heading, which opens and closes it, with its contents under it while open. */
+@Composable
+private fun SettingsGroupRow(
+    @StringRes title: Int,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val spoken = stringResource(if (expanded) R.string.group_open else R.string.group_closed)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(role = Role.Button, onClick = onToggle)
+                .semantics { stateDescription = spoken }
+                .heightIn(min = 56.dp)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(title), color = Primary, fontSize = DashType.Body, fontWeight = FontWeight.SemiBold)
+                if (summary.isNotEmpty()) {
+                    Text(summary, color = Secondary, fontSize = DashType.Label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            state.recordingError?.let { Text(it, color = Alert, fontSize = DashType.Label) }
-
-            TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip)
+            val stroke = Secondary
+            Canvas(Modifier.size(16.dp)) {
+                // A chevron: down while closed, up while open.
+                val tip = if (expanded) size.height * 0.3f else size.height * 0.7f
+                val ends = if (expanded) size.height * 0.7f else size.height * 0.3f
+                val width = Stroke(2.dp.toPx(), cap = StrokeCap.Round).width
+                drawLine(stroke, Offset(size.width * 0.15f, ends), Offset(size.width / 2, tip), width, StrokeCap.Round)
+                drawLine(stroke, Offset(size.width * 0.85f, ends), Offset(size.width / 2, tip), width, StrokeCap.Round)
+            }
         }
+        if (expanded) {
+            Column(
+                Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
+            )
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(PanelEdge))
+    }
+}
+
+@Composable
+private fun GuideStep(number: Int, text: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(number.toString(), color = Accent, fontSize = DashType.Body, fontWeight = FontWeight.SemiBold, style = TabularDigits)
+        Text(text, color = Primary, fontSize = DashType.Body, modifier = Modifier.weight(1f))
     }
 }
 
@@ -1023,7 +1127,6 @@ private fun CarSettings(state: TelemetryUiState, actions: ScreenActions) {
     val active = state.cars.firstOrNull { it.id == state.activeCarId } ?: return
     val activeName = carName(active)
 
-    SectionTitle(R.string.section_car)
     state.cars.forEach { car ->
         ChoiceChip(carName(car), car.id == active.id, Modifier.fillMaxWidth()) { actions.selectCar(car.id) }
     }

@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -233,6 +234,8 @@ class ScreenRenderTest {
         show(state())
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.waitForIdle()
+        compose.onNodeWithText("Car").performClick()
+        compose.waitForIdle()
         compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Edit colours"))
         compose.onNodeWithText("Edit colours").performClick()
         compose.waitForIdle()
@@ -257,6 +260,57 @@ class ScreenRenderTest {
         compose.onNodeWithText("White").performClick()
         save("theme-editor-white")
         assertEquals(ThemePreset.WHITE.theme, theme)
+    }
+
+    private fun showSettings(open: String?, arabic: Boolean = false) {
+        compose.setContent {
+            DashTheme(CarTheme.DEFAULT) {
+                Column(Modifier.fillMaxSize().background(Panel).verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    SettingsContent(state(), settings.copy(language = if (arabic) AppLanguage.ARABIC else AppLanguage.ENGLISH), actions, open)
+                }
+            }
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun settingsFitOneScreenWhenClosed() {
+        showSettings(null)
+        listOf("How to use Zakhm", "Car", "Speed source", "Display", "G-force", "Drives", "Tools").forEach {
+            compose.onNodeWithText(it).assertIsDisplayed()
+        }
+        // Closed groups say what they're set to.
+        compose.onNodeWithText("OBD-II").assertExists()
+        compose.onNodeWithText("km/h · Auto").assertExists()
+        compose.onNodeWithText("0 saved").assertExists()
+        save("settings-closed")
+    }
+
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun settingsOpenOneGroupAtATime() {
+        showSettings(null)
+        compose.onNodeWithText("Display").performClick()
+        compose.onNodeWithText("Portrait").assertExists()
+        compose.onNodeWithText("G-force").performClick()
+        compose.onNodeWithText("Portrait").assertDoesNotExist()
+        compose.onNodeWithText("Felt by driver").assertExists()
+        save("settings-g-open")
+    }
+
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun settingsGuide() {
+        showSettings("GUIDE")
+        compose.onNodeWithText("Fix the phone in a mount.", substring = true).assertExists()
+        save("settings-guide")
+    }
+
+    @Test
+    @Config(qualifiers = "ar-w432dp-h960dp-port-xxhdpi")
+    fun settingsGuideArabic() {
+        showSettings("GUIDE", arabic = true)
+        save("settings-guide-ar")
     }
 
     private fun showDrives(trips: List<SavedTrip>) {

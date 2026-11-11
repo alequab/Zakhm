@@ -151,7 +151,7 @@ class TripTest {
         val lines = doc.getElementsByTagName("LineString").length
         assertEquals("one stretch per colour", 8, lines)
         // Every stretch starts where the one before ended, so the path has no holes.
-        val stretches = (0 until lines).map { doc.getElementsByTagName("coordinates").item(it).textContent.trim().split(' ') }
+        val stretches = (0 until lines).map { (doc.getElementsByTagName("LineString").item(it) as org.w3c.dom.Element).getElementsByTagName("coordinates").item(0).textContent.trim().split(' ') }
         stretches.zipWithNext().forEach { (a, b) -> assertEquals(a.last(), b.first()) }
         assertEquals(80, stretches.sumOf { it.size } - (lines - 1))
         assertTrue(kml.contains("Braking 0.50 G"))
@@ -160,6 +160,39 @@ class TripTest {
         assertTrue(kml.contains("46.000000,24.000000,0"))
         // KML colours run blue, green, red.
         assertTrue(kml.contains("<color>ffFF6C2B</color>"))
+    }
+
+    @Test
+    fun kmlCarriesATimelineAndATourForGoogleEarth() {
+        val points = drive(300, g = { if (it == 100) -0.5 to 0.0 else 0.0 to 0.0 })
+        val doc = parse(TripExport.kml(points, text.copy(facts = listOf("Distance" to "6.0 km"))))
+        val gx = "http://www.google.com/kml/ext/2.2"
+        // Earth needs a time and a place for every point, and each graph as long as the track.
+        assertEquals(300, doc.getElementsByTagName("when").length - doc.getElementsByTagName("TimeStamp").length)
+        assertEquals(300, doc.getElementsByTagNameNS(gx, "coord").length)
+        assertEquals("46.000000 24.000000 0", doc.getElementsByTagNameNS(gx, "coord").item(0).textContent)
+        assertEquals(3, doc.getElementsByTagNameNS(gx, "SimpleArrayData").length)
+        assertEquals(900, doc.getElementsByTagNameNS(gx, "value").length)
+        assertEquals("72.0", doc.getElementsByTagNameNS(gx, "value").item(0).textContent)
+        // The tour: a bounded number of steps, heading north like the drive, ending on the overview.
+        val flights = doc.getElementsByTagNameNS(gx, "FlyTo").length
+        assertTrue("flights: $flights", flights in 20..(92))
+        val headings = doc.getElementsByTagName("heading")
+        assertEquals("0.0", headings.item(1).textContent)
+        assertEquals("smooth", doc.getElementsByTagNameNS(gx, "flyToMode").item(1).textContent)
+        assertEquals("bounce", doc.getElementsByTagNameNS(gx, "flyToMode").item(flights - 1).textContent)
+        // Hard pushes carry a time, so they appear as the car reaches them; the summary is a table.
+        assertEquals(1, doc.getElementsByTagName("TimeStamp").length)
+        assertTrue(doc.getElementsByTagName("description").item(0).textContent.contains("<td><b>Distance</b></td><td>6.0 km</td>"))
+        assertEquals(4, doc.getElementsByTagName("StyleMap").length)
+    }
+
+    @Test
+    fun aDriveOfOnePointHasNoTimelineOrTour() {
+        val kml = TripExport.kml(drive(1), text)
+        parse(kml)
+        assertFalse(kml.contains("gx:Track"))
+        assertFalse(kml.contains("gx:Tour"))
     }
 
     @Test
@@ -176,6 +209,36 @@ class TripTest {
         assertTrue(gpx.contains("<desc>72 km/h · 22:13:32</desc>"))
         // Waypoints must come before the track for the file to be valid GPX.
         assertTrue(gpx.indexOf("<wpt") < gpx.indexOf("<trk>"))
+    }
+
+    /**
+     * A made-up lap, saved to `build/drives` to open in a map program and look at:
+     * two straights and two bends, with a hard launch, hard braking and hard cornering.
+     */
+    @Test
+    fun sampleFilesToLookAt() {
+        val points = (0 until 240).map { i ->
+            val lap = i / 240.0 * 2 * Math.PI
+            val onBend = Math.abs(Math.cos(lap)) < 0.5
+            val speed = if (onBend) 14.0 else 14.0 + 22.0 * (Math.abs(Math.cos(lap)) - 0.5) * 2
+            val forward = when (i % 120) {
+                in 42..46 -> 0.34
+                in 14..18 -> -0.55
+                else -> 0.03
+            }
+            TripPoint(
+                timeMs = 1_700_000_000_000 + i * 1000L,
+                latitude = 50.3350 + 0.004 * Math.sin(lap),
+                longitude = 6.9470 + 0.012 * Math.cos(lap),
+                speedMps = speed,
+                forwardG = forward,
+                sideG = if (onBend) 0.52 else 0.02,
+            )
+        }
+        val dir = java.io.File("build/drives").apply { mkdirs() }
+        java.io.File(dir, "sample.kml").writeText(TripExport.kml(points, text))
+        java.io.File(dir, "sample.gpx").writeText(TripExport.gpx(points, text))
+        assertEquals(4, Trips.events(points).count { it.kind == GEventKind.BRAKING || it.kind == GEventKind.SPEEDING_UP })
     }
 
     @Test

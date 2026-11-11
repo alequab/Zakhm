@@ -48,8 +48,9 @@ internal fun tripTitle(context: Context, summary: TripSummary): String {
     return SimpleDateFormat("EEE d MMM yyyy, HH:mm", locale).format(Date(summary.startMs))
 }
 
-/** A drive in one line: how long, how far, how fast and how hard. */
-internal fun tripDetails(context: Context, summary: TripSummary, useMph: Boolean): String {
+private class TripFigures(val duration: String, val distance: String, val topSpeed: String, val strongestG: String)
+
+private fun tripFigures(context: Context, summary: TripSummary, useMph: Boolean): TripFigures {
     val minutes = summary.durationS / 60
     val duration = if (minutes < 60) {
         context.getString(R.string.drive_minutes, minutes)
@@ -66,11 +67,35 @@ internal fun tripDetails(context: Context, summary: TripSummary, useMph: Boolean
         summary.topSpeedMps * if (useMph) MPH_PER_MPS else KMH_PER_MPS,
         context.getString(if (useMph) R.string.unit_mph else R.string.unit_kmh),
     )
-    return context.getString(R.string.drive_details, duration, distance, speed, "%.2f".format(Locale.US, summary.strongestG))
+    return TripFigures(duration, distance, speed, "%.2f".format(Locale.US, summary.strongestG))
+}
+
+/** A drive in one line: how long, how far, how fast and how hard. */
+internal fun tripDetails(context: Context, summary: TripSummary, useMph: Boolean): String {
+    val figures = tripFigures(context, summary, useMph)
+    return context.getString(R.string.drive_details, figures.duration, figures.distance, figures.topSpeed, figures.strongestG)
 }
 
 /** The words written into a drive's map file. */
-internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean) = TripText(
+internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean): TripText {
+    val figures = tripFigures(context, summary, useMph)
+    return TripText(
+        facts = listOf(
+            context.getString(R.string.trip_fact_date) to tripTitle(context, summary),
+            context.getString(R.string.trip_fact_duration) to figures.duration,
+            context.getString(R.string.trip_fact_distance) to figures.distance,
+            context.getString(R.string.trip_top_speed) to figures.topSpeed,
+            context.getString(R.string.trip_fact_strongest_g) to "${figures.strongestG} G",
+        ),
+        speedLabel = context.getString(R.string.trip_speed_folder),
+        timeLabel = context.getString(R.string.trip_fact_time),
+        gLabel = context.getString(R.string.trip_g_folder),
+        forwardGLabel = context.getString(R.string.trip_forward_g),
+        sideGLabel = context.getString(R.string.trip_side_g),
+        driveFolder = context.getString(R.string.trip_drive_folder),
+        tourName = context.getString(R.string.trip_tour),
+        timelineName = context.getString(R.string.trip_timeline),
+        rightToLeft = context.resources.configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL,
     name = context.getString(R.string.trip_file_name, tripTitle(context, summary)),
     description = tripDetails(context, summary, useMph),
     speedFolder = context.getString(R.string.trip_speed_folder),
@@ -84,7 +109,8 @@ internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean) =
     rightTurn = context.getString(R.string.trip_right),
     speedUnit = context.getString(if (useMph) R.string.unit_mph else R.string.unit_kmh),
     speedFactor = if (useMph) MPH_PER_MPS else KMH_PER_MPS,
-)
+    )
+}
 
 @Composable
 internal fun TripsSection(
