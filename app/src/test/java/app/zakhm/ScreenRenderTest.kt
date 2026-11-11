@@ -147,6 +147,8 @@ class ScreenRenderTest {
         compose.onAllNodes(hasClickLabel("Show full screen"))[1].performClick()
         compose.waitForIdle()
         compose.onNodeWithText("KM/H").assertDoesNotExist()
+        // Where the speed comes from must stay on screen in full screen too.
+        compose.onNodeWithText("OBD-II", substring = true).assertExists()
         compose.onNode(hasClickLabel("Show both again")).performClick()
         compose.waitForIdle()
         compose.onNodeWithText("KM/H").assertExists()

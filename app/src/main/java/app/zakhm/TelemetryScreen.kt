@@ -6,6 +6,11 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
@@ -182,6 +187,21 @@ private val PanelShape = RoundedCornerShape(18.dp)
 
 private const val MAX_CAR_NAME_LENGTH = 40
 
+/**
+ * The text sizes for everything that isn't an instrument's own number, on Material's
+ * scale, so the same role is the same size on every screen.
+ */
+internal object DashType {
+    /** Captions around the instruments, section titles, and anything read at a glance. */
+    val Label = 12.sp
+
+    /** Status, hints and controls. */
+    val Body = 14.sp
+}
+
+private const val FOCUS_FADE_OUT_MS = 90
+private const val FOCUS_FADE_IN_MS = 180
+
 /** How many font sizes wide three bold tabular digits are, with a little room spare. */
 private const val BIG_SPEED_DIGIT_WIDTHS = 1.85f
 
@@ -278,7 +298,7 @@ private fun UpdateBanner(state: UpdateState, actions: ScreenActions) {
                 message,
                 Modifier.weight(1f),
                 color = if (state is UpdateState.Failed) Alert else Accent,
-                fontSize = 13.sp,
+                fontSize = DashType.Body,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -290,7 +310,7 @@ private fun UpdateBanner(state: UpdateState, actions: ScreenActions) {
         }
         val notes = state.update?.notes.orEmpty()
         if (state is UpdateState.Available && notes.isNotBlank()) {
-            Text(notes, color = Secondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(notes, color = Secondary, fontSize = DashType.Label, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -337,32 +357,46 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val landscape = maxWidth > maxHeight
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Full screen gives the status row's room to the instrument too.
-            if (focus == null) Header(state, settings.useMph) { showSettings = true }
-            when {
-                focus == Focus.SPEED ->
-                    BigSpeed(s, settings.useMph, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.SPEED)))
-                focus == Focus.G && landscape ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)), large = true)
-                        PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
-                    }
-                focus == Focus.G -> {
-                    GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)), large = true)
-                    PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
-                }
-                landscape ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.SPEED)))
-                        GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)))
-                        PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
-                    }
-                else -> {
-                    // The G circle is limited by its panel's height on a phone, while the speed dial
-                    // leaves room under its arc, so the circle gets the larger share.
-                    SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT).then(tapToFocus(Focus.SPEED)))
-                    GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)))
-                    PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
+            // Full screen gives the header's room to the instrument, but keeps the status line.
+            if (focus == null) Header(state, settings.useMph) { showSettings = true } else FocusStatus(state, settings.useMph)
+            // A short fade through, so the change of view reads as one move. Android's
+            // "remove animations" setting turns it into a cut.
+            AnimatedContent(
+                targetState = focus,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                transitionSpec = {
+                    fadeIn(tween(FOCUS_FADE_IN_MS, delayMillis = FOCUS_FADE_OUT_MS)) togetherWith fadeOut(tween(FOCUS_FADE_OUT_MS))
+                },
+                label = "focus",
+            ) { shown ->
+                val gap = Arrangement.spacedBy(8.dp)
+                when {
+                    shown == Focus.SPEED ->
+                        BigSpeed(s, settings.useMph, Modifier.fillMaxSize().then(tapToFocus(Focus.SPEED)))
+                    shown == Focus.G && landscape ->
+                        Row(Modifier.fillMaxSize(), horizontalArrangement = gap) {
+                            GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)), large = true)
+                            PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
+                        }
+                    shown == Focus.G ->
+                        Column(Modifier.fillMaxSize(), verticalArrangement = gap) {
+                            GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)), large = true)
+                            PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
+                        }
+                    landscape ->
+                        Row(Modifier.fillMaxSize(), horizontalArrangement = gap) {
+                            SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.SPEED)))
+                            GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)))
+                            PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
+                        }
+                    else ->
+                        Column(Modifier.fillMaxSize(), verticalArrangement = gap) {
+                            // The G circle is limited by its panel's height on a phone, while the speed dial
+                            // leaves room under its arc, so the circle gets the larger share.
+                            SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT).then(tapToFocus(Focus.SPEED)))
+                            GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)))
+                            PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
+                        }
                 }
             }
         }
@@ -425,35 +459,55 @@ private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () 
             Text(
                 state.carNotice ?: activeCar?.let { carName(it) }.orEmpty(),
                 color = if (state.carNotice != null) Good else Secondary,
-                fontSize = 12.sp,
+                fontSize = DashType.Label,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(statusColor, CircleShape))
-                Spacer(Modifier.width(8.dp))
-                // Scrolls a few times if it doesn't fit, then stops, as moving text redraws the whole screen.
-                Text(
-                    statusText,
-                    Modifier.basicMarquee(iterations = STATUS_SCROLLS, repeatDelayMillis = STATUS_SCROLL_PAUSE_MS),
-                    color = Primary,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                )
-            }
+            StatusLine(statusText, statusColor)
         }
-        if (state.recording) {
-            Box(Modifier.size(8.dp).background(Alert, CircleShape))
-            Text(
-                " %d:%02d".format(Locale.US, state.recordingSeconds / 60, state.recordingSeconds % 60),
-                color = Alert,
-                fontSize = 13.sp,
-                style = TabularDigits,
-            )
-        }
+        RecordingBadge(state)
         IconButton(onClick = onOpenSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
             SlidersIcon()
         }
+    }
+}
+
+/** Where the speed comes from and how good it is: the one line that must stay visible in every view. */
+@Composable
+private fun StatusLine(text: String, color: Color, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).background(color, CircleShape))
+        Spacer(Modifier.width(8.dp))
+        // Scrolls a few times if it doesn't fit, then stops, as moving text redraws the whole screen.
+        Text(
+            text,
+            Modifier.basicMarquee(iterations = STATUS_SCROLLS, repeatDelayMillis = STATUS_SCROLL_PAUSE_MS),
+            color = Primary,
+            fontSize = DashType.Body,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun RecordingBadge(state: TelemetryUiState) {
+    if (!state.recording) return
+    Box(Modifier.size(8.dp).background(Alert, CircleShape))
+    Text(
+        " %d:%02d".format(Locale.US, state.recordingSeconds / 60, state.recordingSeconds % 60),
+        color = Alert,
+        fontSize = DashType.Body,
+        style = TabularDigits,
+    )
+}
+
+/** The status alone, for full screen: an estimated or lost speed must never go unexplained. */
+@Composable
+private fun FocusStatus(state: TelemetryUiState, useMph: Boolean) {
+    val (statusText, statusColor) = speedStatus(state, useMph)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        StatusLine(statusText, statusColor, Modifier.weight(1f))
+        RecordingBadge(state)
     }
 }
 
@@ -618,7 +672,7 @@ private class GaugeTick(
 )
 
 @Composable
-private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize: TextUnit, unit: String, unitSize: TextUnit = 13.sp) {
+private fun SpeedNumber(value: Double?, color: Color, size: TextUnit, emptySize: TextUnit, unit: String, unitSize: TextUnit = DashType.Body) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value?.takeIf { it.isFinite() }?.roundToInt()?.toString() ?: "--",
@@ -657,14 +711,24 @@ private fun BigSpeed(s: TelemetrySnapshot, useMph: Boolean, modifier: Modifier) 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             SpeedNumber(displayed, valueColor, big, big * 0.5f, unitLabel(useMph), unitSize = 20.sp)
             Spacer(Modifier.height(20.dp))
-            Box(
-                Modifier
-                    .fillMaxWidth(0.9f)
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(colors.track),
-            ) {
-                Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(colors.accent))
+            Column(Modifier.fillMaxWidth(0.9f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(colors.track),
+                ) {
+                    Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(colors.accent))
+                }
+                // The ends of the scale, the same range as the dial, so the bar means something.
+                // Numbers read left to right in every language, like the dial.
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("0", color = Secondary, fontSize = DashType.Label, style = TabularDigits)
+                        Text(maxSpeed.toString(), color = Secondary, fontSize = DashType.Label, style = TabularDigits)
+                    }
+                }
             }
         }
     }
@@ -690,7 +754,7 @@ private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: M
     val colors = LocalDash.current
     val dotColor = if (total >= HIGH_G) colors.alert else colors.accent
     val measurer = rememberTextMeasurer()
-    val ringLabelStyle = TextStyle(color = colors.secondary, fontSize = 11.sp)
+    val ringLabelStyle = TextStyle(color = colors.secondary, fontSize = DashType.Label)
 
     Box(modifier.panel().padding(2.dp), contentAlignment = Alignment.Center) {
         // Left and right here are the car's real directions, so they never mirror for Arabic.
@@ -752,7 +816,7 @@ private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: M
                         },
                         Modifier.padding(horizontal = 44.dp).background(Panel).padding(4.dp),
                         color = Accent,
-                        fontSize = 13.sp,
+                        fontSize = DashType.Body,
                         textAlign = TextAlign.Center,
                         // The meter is laid out left to right, but a sentence must keep its own language's direction.
                         style = TextStyle(textDirection = TextDirection.Content),
@@ -808,7 +872,7 @@ private fun BoxScope.MeterLabel(@StringRes text: Int, alignment: Alignment) {
         Modifier.align(alignment).background(Panel).padding(horizontal = 4.dp),
         color = Secondary,
         // Read at a glance from the driver's seat.
-        fontSize = 12.sp,
+        fontSize = DashType.Label,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = labelSpacing(1.sp),
     )
@@ -849,7 +913,7 @@ private fun PeakTile(@StringRes label: Int, value: Double, modifier: Modifier) {
             style = TabularDigits,
             maxLines = 1,
         )
-        Text(stringResource(label), color = Secondary, fontSize = 10.sp, letterSpacing = labelSpacing(1.sp), maxLines = 1)
+        Text(stringResource(label), color = Secondary, fontSize = DashType.Label, letterSpacing = labelSpacing(1.sp), maxLines = 1)
     }
 }
 
@@ -942,7 +1006,7 @@ private fun SettingsSheet(
                     )
                 }
             }
-            state.recordingError?.let { Text(it, color = Alert, fontSize = 12.sp) }
+            state.recordingError?.let { Text(it, color = Alert, fontSize = DashType.Label) }
         }
     }
 }
@@ -1069,15 +1133,16 @@ internal fun SectionTitle(@StringRes text: Int) {
     Text(
         stringResource(text).uppercase(Locale.US),
         color = Secondary,
-        fontSize = 11.sp,
+        fontSize = DashType.Label,
         letterSpacing = labelSpacing(1.5.sp),
-        modifier = Modifier.padding(top = 6.dp),
+        // Further from the section above than from its own controls, so each group reads as one.
+        modifier = Modifier.padding(top = 14.dp),
     )
 }
 
 @Composable
 internal fun Hint(text: String) {
-    Text(text, color = Secondary, fontSize = 13.sp)
+    Text(text, color = Secondary, fontSize = DashType.Body)
 }
 
 @Composable
@@ -1105,7 +1170,7 @@ private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier, onC
         Text(
             label,
             color = if (selected) OnAccent else Primary,
-            fontSize = 13.sp,
+            fontSize = DashType.Body,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1117,11 +1182,12 @@ private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier, onC
 internal fun CompactButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier,
+        // Android's minimum touch target, the same as the choice chips.
+        modifier = modifier.heightIn(min = 48.dp),
         border = BorderStroke(1.dp, PanelEdge),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        Text(text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, fontSize = DashType.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

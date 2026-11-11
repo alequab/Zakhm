@@ -167,7 +167,7 @@ private fun PresetSwatch(preset: ThemePreset, selected: Boolean, modifier: Modif
         Text(
             stringResource(preset.label),
             color = Primary,
-            fontSize = 11.sp,
+            fontSize = DashType.Label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
