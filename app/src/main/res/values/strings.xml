@@ -138,11 +138,38 @@
     <string name="tool_reset_peaks">Reset peaks</string>
     <string name="tool_record">Record drive</string>
     <string name="tool_stop_recording">Stop recording</string>
-    <string name="tool_share_recording">Share recording</string>
+    <string name="tool_share_recording">Share raw data</string>
     <string name="share_title">Share drive recording</string>
     <string name="recording_error_start">Could not start recording</string>
     <string name="recording_error_finish">Could not finish recording</string>
     <string name="recording_error_write">Recording failed</string>
+    <string name="recording_error_trip">Could not save the drive for the map</string>
+
+    <string name="section_drives">Saved drives</string>
+    <string name="drives_hint">Each drive you record is saved here with its path, speed and G-force. Open it as KML in Google Earth to see the path coloured by speed with the hard pushes marked, or as GPX in almost any map app. Drives stay on this phone until you share one.</string>
+    <string name="drives_none">No drives yet.</string>
+    <string name="drives_show_all">Show all (%1$d)</string>
+    <string name="drive_kml" translatable="false">KML</string>
+    <string name="drive_gpx" translatable="false">GPX</string>
+    <string name="drive_minutes">%1$d min</string>
+    <string name="drive_hours">%1$d h %2$02d min</string>
+    <string name="drive_details">%1$s · %2$s · top %3$s · %4$s G</string>
+    <string name="drive_delete_title">Delete this drive?</string>
+    <string name="drive_delete_body">%1$s will be removed from this phone.</string>
+    <string name="drive_export_error">Could not make the map file</string>
+    <string name="share_trip_title">Open or share drive</string>
+    <string name="unit_km">km</string>
+    <string name="unit_mi">mi</string>
+    <string name="trip_file_name">Zakhm %1$s</string>
+    <string name="trip_speed_folder">Speed</string>
+    <string name="trip_g_folder">G-force</string>
+    <string name="trip_start">Start</string>
+    <string name="trip_end">End</string>
+    <string name="trip_top_speed">Top speed</string>
+    <string name="trip_speeding_up">Speeding up</string>
+    <string name="trip_braking">Braking</string>
+    <string name="trip_left">Left turn</string>
+    <string name="trip_right">Right turn</string>
 
     <string name="auto_needs_permission">This app needs permission to read this car\'s speed. Park, then allow it.</string>
     <string name="auto_sending">Sending car speed to your phone. Keep the app open on the phone to see it.</string>

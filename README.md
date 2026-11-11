@@ -66,7 +66,7 @@
 <td valign="top"><b>قراءات صادقة</b><br>تُعلَّم السرعة كتقدير عند فقدان GPS، ثم تُخفى بعد ثوانٍ قليلة.</td>
 </tr>
 <tr>
-<td valign="top"><b>تسجيل الرحلة</b><br>يحفظ قراءات الحساسات في ملف يمكنك مشاركته، بدون أي بيانات موقع.</td>
+<td valign="top"><b>تسجيل الرحلة والخريطة</b><br>تُحفظ كل رحلة تسجّلها بمسارها وسرعتها وقوة G، وتفتحها في تطبيقات الخرائط بصيغة KML أو GPX: المسار ملوّن حسب السرعة، مع علامات عند الفرملة والتسارع والانعطاف القوي.</td>
 <td valign="top"><b>تحديث من داخل التطبيق</b><br>إشعار عند صدور إصدار جديد، وتنزيل موثَّق بضغطة، ويبقى التثبيت بموافقتك.</td>
 </tr>
 <tr>
@@ -119,7 +119,7 @@ flowchart LR
 - **لا تستخدم التطبيق أثناء القيادة.** جهّزه قبل الانطلاق، ودع أحد الركاب يتعامل مع الهاتف أثناء سير السيارة.
 - **ثبّت الهاتف في حامل متين.** فالحامل المهتز يضيف أخطاء لا يزيلها التطبيق بالكامل.
 - **موقعك لا يخرج من هاتفك.** يُستخدم لقراءة سرعة GPS فقط، ولا يُحفظ ولا يُرسل إلى أي جهة.
-- **بياناتك على هاتفك.** تبقى السيارات المحفوظة، بما فيها رقم الهيكل وعنوان محوّل البلوتوث، في مساحة التخزين الخاصة بالتطبيق. ولا تحتوي تسجيلات الرحلات على موقع أو رقم هيكل، وتبقى على هاتفك ما لم تشاركها.
+- **بياناتك على هاتفك.** تبقى السيارات المحفوظة، بما فيها رقم الهيكل وعنوان محوّل البلوتوث، في مساحة التخزين الخاصة بالتطبيق. تحتوي الرحلات المحفوظة على مسار السيارة، فتبقى في مساحة التطبيق الخاصة ولا تغادر الهاتف إلا إذا شاركت إحداها. أما ملف البيانات الخام للحساسات فلا يحتوي على موقع أو رقم هيكل.
 - **الإنترنت للتحديثات فقط.** عند كل تشغيل وكل 12 ساعة في الخلفية، يسأل التطبيق خادم التحديث عن أحدث إصدار، ولا يُنزّل التحديث إلا إذا ضغطت تحديث. لا ترسل هذه الطلبات أي بيانات حساسات أو موقع، لكن يمكن للخادم رؤية عنوان IP الخاص بك كما في أي طلب عبر الإنترنت.
 
 ### ما يجب معرفته
@@ -224,7 +224,7 @@ flowchart LR
 <td valign="top"><b>Honest readings</b><br>Speed is marked as an estimate when GPS is lost, then hidden after a few seconds.</td>
 </tr>
 <tr>
-<td valign="top"><b>Drive recording</b><br>Saves sensor readings to a file you can share, with no location data.</td>
+<td valign="top"><b>Drive recording and map</b><br>Each drive you record is saved with its path, speed and G-force. Open it in map apps as KML or GPX: the path is coloured by speed, with markers at hard braking, acceleration and cornering.</td>
 <td valign="top"><b>In-app updates</b><br>A notification when a new version is out, a verified one-tap download, and you approve the install.</td>
 </tr>
 <tr>
@@ -273,7 +273,7 @@ flowchart LR
 - **Don't use the app while driving.** Set it up before you leave, and let a passenger handle the phone while the car is moving.
 - **Use a firm mount.** A shaky mount adds errors the app can't fully remove.
 - **Your location stays on your phone.** It's used only to read GPS speed, and it's never saved or sent anywhere.
-- **Your data stays on your phone.** Saved cars, including any VIN or Bluetooth adapter address, stay in the app's private storage. Drive recordings contain no position or VIN, and stay on your phone unless you share them.
+- **Your data stays on your phone.** Saved cars, including any VIN or Bluetooth adapter address, stay in the app's private storage. Saved drives hold the car's path, so they stay in the app's private storage and leave the phone only when you share one. The raw sensor data file contains no position or VIN.
 - **Internet for updates only.** Each time it starts and every 12 hours in the background, the app asks an update server for the newest version, and only downloads it if you tap Update. These requests send no sensor or location data, though the server can see your IP address, as with any internet request.
 
 ### Good to know

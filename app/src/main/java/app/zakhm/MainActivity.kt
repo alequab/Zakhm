@@ -9,6 +9,7 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -22,6 +23,7 @@ import android.os.LocaleList
 import android.os.Looper
 import android.provider.Settings
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -38,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 
 import app.zakhm.core.SpeedInput
+import app.zakhm.core.TripExport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -218,6 +221,8 @@ class MainActivity : ComponentActivity() {
             dismissUpdate = viewModel::dismissUpdate,
             setGView = ::setGViewMode,
             setGRange = ::setGRangeChoice,
+            shareTrip = ::shareTrip,
+            deleteTrip = { controller.deleteTrip(it) },
         )
     }
 
@@ -383,7 +388,39 @@ class MainActivity : ComponentActivity() {
             .setType("application/gzip")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(null, uri)
         startActivity(Intent.createChooser(send, getString(R.string.share_title)))
+    }
+
+    /** Writes the drive as a map file and offers it to other apps, to open or to send on. */
+    private fun shareTrip(trip: SavedTrip, format: TripFormat) {
+        try {
+            val points = TripStore.read(trip.file)
+            val text = tripText(this, trip.summary, useMph)
+            val body = if (format == TripFormat.KML) TripExport.kml(points, text) else TripExport.gpx(points, text)
+            val dir = File(cacheDir, "export")
+            if (!dir.isDirectory && !dir.mkdirs()) throw IOException()
+            // Only the newest is kept: each holds a whole drive's path.
+            dir.listFiles()?.forEach { it.delete() }
+            val file = File(dir, trip.file.nameWithoutExtension + format.extension)
+            file.writeText(body)
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType(format.mime)
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Without this the share sheet itself may not read the file, and shows no name for it.
+            send.clipData = ClipData.newRawUri(null, uri)
+            // So map apps on this phone are offered too, not only ways to send the file.
+            val open = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, format.mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val chooser = Intent.createChooser(send, getString(R.string.share_trip_title))
+                .putExtra(Intent.EXTRA_ALTERNATE_INTENTS, arrayOf(open))
+            startActivity(chooser)
+        } catch (_: IOException) {
+            Toast.makeText(this, R.string.drive_export_error, Toast.LENGTH_LONG).show()
+        }
     }
 
     private companion object {

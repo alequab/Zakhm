@@ -138,11 +138,36 @@
     <string name="tool_reset_peaks">تصفير أعلى القيم</string>
     <string name="tool_record">تسجيل الرحلة</string>
     <string name="tool_stop_recording">إيقاف التسجيل</string>
-    <string name="tool_share_recording">مشاركة التسجيل</string>
+    <string name="tool_share_recording">مشاركة البيانات الخام</string>
     <string name="share_title">مشاركة تسجيل الرحلة</string>
     <string name="recording_error_start">تعذّر بدء التسجيل</string>
     <string name="recording_error_finish">تعذّر إنهاء التسجيل</string>
     <string name="recording_error_write">فشل التسجيل</string>
+    <string name="recording_error_trip">تعذّر حفظ الرحلة للخريطة</string>
+
+    <string name="section_drives">الرحلات المحفوظة</string>
+    <string name="drives_hint">كل رحلة تسجّلها تُحفظ هنا بمسارها وسرعتها وقوة G. افتحها بصيغة KML في Google Earth لترى المسار ملوّنًا حسب السرعة مع علامات عند الدفعات القوية، أو بصيغة GPX في أغلب تطبيقات الخرائط. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
+    <string name="drives_none">لا توجد رحلات بعد.</string>
+    <string name="drives_show_all">عرض الكل (%1$d)</string>
+    <string name="drive_minutes">%1$d د</string>
+    <string name="drive_hours">%1$d س %2$02d د</string>
+    <string name="drive_details">%1$s · %2$s · الأعلى %3$s · %4$s G</string>
+    <string name="drive_delete_title">حذف هذه الرحلة؟</string>
+    <string name="drive_delete_body">ستُحذف رحلة %1$s من هذا الهاتف.</string>
+    <string name="drive_export_error">تعذّر إنشاء ملف الخريطة</string>
+    <string name="share_trip_title">فتح الرحلة أو مشاركتها</string>
+    <string name="unit_km">كم</string>
+    <string name="unit_mi">ميل</string>
+    <string name="trip_file_name">زخم %1$s</string>
+    <string name="trip_speed_folder">السرعة</string>
+    <string name="trip_g_folder">قوة G</string>
+    <string name="trip_start">البداية</string>
+    <string name="trip_end">النهاية</string>
+    <string name="trip_top_speed">أعلى سرعة</string>
+    <string name="trip_speeding_up">تسارع</string>
+    <string name="trip_braking">فرملة</string>
+    <string name="trip_left">انعطاف يسارًا</string>
+    <string name="trip_right">انعطاف يمينًا</string>
 
     <string name="auto_needs_permission">يحتاج التطبيق إلى إذن لقراءة سرعة هذه السيارة. توقف ثم اسمح بذلك.</string>
     <string name="auto_sending">تُرسل سرعة السيارة إلى هاتفك. أبقِ التطبيق مفتوحًا على الهاتف لرؤيتها.</string>

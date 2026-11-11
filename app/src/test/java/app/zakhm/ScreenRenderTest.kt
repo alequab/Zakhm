@@ -36,6 +36,7 @@ import app.zakhm.core.SpeedInput
 import app.zakhm.core.SpeedSource
 import app.zakhm.core.TelemetrySnapshot
 import app.zakhm.core.ThemePreset
+import app.zakhm.core.TripSummary
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -256,6 +257,45 @@ class ScreenRenderTest {
         compose.onNodeWithText("White").performClick()
         save("theme-editor-white")
         assertEquals(ThemePreset.WHITE.theme, theme)
+    }
+
+    private fun showDrives(trips: List<SavedTrip>) {
+        compose.setContent {
+            DashTheme(CarTheme.DEFAULT) {
+                Column(
+                    Modifier.fillMaxSize().background(Panel).verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    TripsSection(trips, useMph = false, onShare = { _, _ -> }, onDelete = {})
+                }
+            }
+        }
+    }
+
+    private fun trip(name: String, minutes: Long, meters: Double) =
+        SavedTrip(File(name), TripSummary(1_762_870_000_000 - minutes * 3_600_000, minutes * 60, meters, 31.4, 0.62))
+
+    @Test
+    fun savedDrives() {
+        showDrives(listOf(trip("a", 12, 8_400.0), trip("b", 95, 121_300.0), trip("c", 4, 900.0), trip("d", 30, 22_000.0)))
+        compose.onNodeWithText("Show all (4)").assertExists()
+        save("drives")
+        compose.onNodeWithText("Show all (4)").performClick()
+        compose.onNodeWithText("Show all (4)").assertDoesNotExist()
+        compose.onNodeWithText("1 h 35 min · 121.3 km · top 113 km/h · 0.62 G").assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "ar-w393dp-h851dp-port-xxhdpi")
+    fun savedDrivesArabic() {
+        showDrives(listOf(trip("a", 12, 8_400.0)))
+        save("drives-ar")
+    }
+
+    @Test
+    fun noSavedDrives() {
+        showDrives(emptyList())
+        compose.onNodeWithText("No drives yet.").assertExists()
     }
 
     @Test

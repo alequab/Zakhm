@@ -177,6 +177,8 @@ class ScreenActions(
     val dismissUpdate: () -> Unit,
     val setGView: (GView) -> Unit = {},
     val setGRange: (Double) -> Unit = {},
+    val shareTrip: (SavedTrip, TripFormat) -> Unit = { _, _ -> },
+    val deleteTrip: (SavedTrip) -> Unit = {},
 )
 
 
@@ -1007,6 +1009,8 @@ private fun SettingsSheet(
                 }
             }
             state.recordingError?.let { Text(it, color = Alert, fontSize = DashType.Label) }
+
+            TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip)
         }
     }
 }

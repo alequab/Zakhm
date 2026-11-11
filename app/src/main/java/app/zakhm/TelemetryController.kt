@@ -27,6 +27,8 @@ import app.zakhm.core.SpeedInput
 import app.zakhm.core.SpeedRouter
 import app.zakhm.core.TelemetryEngine
 import app.zakhm.core.TelemetrySnapshot
+import app.zakhm.core.TripFile
+import app.zakhm.core.TripRecorder
 import app.zakhm.core.Vec3
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,6 +61,8 @@ data class TelemetryUiState(
     val recordingSeconds: Long = 0,
     val lastRecording: File? = null,
     val recordingError: String? = null,
+    /** The drives saved on this phone, newest first. */
+    val trips: List<SavedTrip> = emptyList(),
 )
 
 /**
@@ -105,6 +109,14 @@ class TelemetryController(private val context: Context) {
     private var lastRecording: File? = null
     private var recordingError: String? = null
 
+    /** The drive being saved for the map, alongside the raw recording. */
+    private val tripStore = TripStore(File(context.filesDir, "drives"))
+    private val tripRecorder = TripRecorder()
+    private var tripWriter: BufferedWriter? = null
+    private var tripFile: File? = null
+    private var tripPoints = 0
+    private var trips = emptyList<SavedTrip>()
+
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
             val v = event.values
@@ -141,6 +153,7 @@ class TelemetryController(private val context: Context) {
                 ),
             )
             record(DriveLog.gps(location.elapsedRealtimeNanos, speed, speedAccuracy, horizontalAccuracy))
+            recordPosition(location)
         }
 
         override fun onProviderEnabled(provider: String) {
@@ -170,7 +183,10 @@ class TelemetryController(private val context: Context) {
     }
 
     init {
-        handler.post { loadCars() }
+        handler.post {
+            trips = tripStore.list()
+            loadCars()
+        }
     }
 
     /** Requires precise location permission to have been granted. */
@@ -305,6 +321,12 @@ class TelemetryController(private val context: Context) {
 
     fun toggleRecording() = handler.post {
         if (recorder != null) stopRecordingNow() else startRecordingNow()
+    }
+
+    fun deleteTrip(trip: SavedTrip) = handler.post {
+        tripStore.delete(trip.file)
+        trips = tripStore.list()
+        publish()
     }
 
     private fun loadCars() {
@@ -456,8 +478,10 @@ class TelemetryController(private val context: Context) {
     }
 
     private fun publish() {
+        val snapshot = engine.snapshot()
+        if (tripWriter != null) tripRecorder.onG(snapshot.longitudinalG, snapshot.lateralG)
         _state.value = TelemetryUiState(
-            snapshot = engine.snapshot(),
+            snapshot = snapshot,
             selectedInput = router.selected,
             activeInput = router.active(SystemClock.elapsedRealtimeNanos() / 1e9),
             obdState = obdState,
@@ -472,6 +496,7 @@ class TelemetryController(private val context: Context) {
             recordingSeconds = if (recorder != null) (SystemClock.elapsedRealtime() - recordingStart) / 1000 else 0,
             lastRecording = lastRecording,
             recordingError = recordingError,
+            trips = trips,
         )
     }
 
@@ -489,9 +514,58 @@ class TelemetryController(private val context: Context) {
             recordingFile = file
             recordingStart = SystemClock.elapsedRealtime()
             lastRecorderFlush = recordingStart
+            try {
+                startTrip(stamp)
+            } catch (_: IOException) {
+                // The raw recording still runs; only the drive for the map is missing.
+                recordingError = context.getString(R.string.recording_error_trip)
+            }
         } catch (_: IOException) {
             recordingError = context.getString(R.string.recording_error_start)
         }
+    }
+
+    @Throws(IOException::class)
+    private fun startTrip(stamp: String) {
+        val file = tripStore.newFile(stamp)
+        val out = file.bufferedWriter()
+        out.write(TripFile.HEADER)
+        out.newLine()
+        tripWriter = out
+        tripFile = file
+        tripPoints = 0
+    }
+
+    /** Adds where the car is now to the drive being saved. */
+    private fun recordPosition(location: Location) {
+        val out = tripWriter ?: return
+        // A position this vague would draw the path through buildings.
+        if (location.hasAccuracy() && location.accuracy > MAX_TRIP_POSITION_ERROR_M) return
+        val point = tripRecorder.onPosition(location.time, location.latitude, location.longitude, engine.snapshot().speedMps)
+        try {
+            out.write(TripFile.line(point))
+            out.newLine()
+            // About one a second, so nothing is lost if the app is closed mid-drive.
+            out.flush()
+            tripPoints++
+        } catch (_: IOException) {
+            recordingError = context.getString(R.string.recording_error_write)
+            stopTrip()
+        }
+    }
+
+    private fun stopTrip() {
+        val out = tripWriter ?: return
+        tripWriter = null
+        try {
+            out.close()
+        } catch (_: IOException) {
+            recordingError = context.getString(R.string.recording_error_finish)
+        }
+        // Without at least two places there is no path to show.
+        if (tripPoints < 2) tripFile?.delete()
+        tripFile = null
+        trips = tripStore.list()
     }
 
     /** Raw sensor recordings are large, so only the newest are kept. */
@@ -503,6 +577,7 @@ class TelemetryController(private val context: Context) {
     }
 
     private fun stopRecordingNow() {
+        stopTrip()
         val out = recorder ?: return
         recorder = null
         try {
@@ -538,6 +613,7 @@ class TelemetryController(private val context: Context) {
         const val SENSOR_PERIOD_US = 5000
         const val MAX_RECORDINGS = 20
         const val RECORDER_FLUSH_INTERVAL_MS = 5000L
+        const val MAX_TRIP_POSITION_ERROR_M = 50f
         const val CAR_NOTICE_MS = 6000L
 
         /** OBD reports whole km/h, and wheel speed carries some error of its own. */
