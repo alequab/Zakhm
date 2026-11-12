@@ -355,6 +355,51 @@ class ScreenRenderTest {
         compose.onNodeWithText("No drives yet.").assertExists()
     }
 
+    /**
+     * The README's pictures, with sample readings and drives, at 540 x 1145 pixels like
+     * the earlier ones. Saved to `build/screens/readme-*.png` and copied into `docs/images` by hand.
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h763dp-port-hdpi")
+    fun readmeEnglish() = readme("en", AppLanguage.ENGLISH)
+
+    @Test
+    @Config(qualifiers = "ar-w360dp-h763dp-port-hdpi")
+    fun readmeArabic() = readme("ar", AppLanguage.ARABIC)
+
+    private fun readme(name: String, language: AppLanguage) {
+        val shown = settings.copy(gView = GView.DRIVER, gRange = 1.5, language = language)
+        val drives = listOf(
+            SavedTrip(File("a"), TripSummary(1_794_480_000_000, 26 * 60, 18_400.0, 27.8, 0.48)),
+            SavedTrip(File("b"), TripSummary(1_794_390_000_000, 12 * 60, 7_900.0, 19.4, 0.36)),
+            SavedTrip(File("c"), TripSummary(1_794_300_000_000, 74 * 60, 96_200.0, 33.3, 0.52)),
+        )
+        var screen by mutableStateOf(0)
+        compose.setContent {
+            when (screen) {
+                0 -> TelemetryScreen(state(), UpdateState.None, true, shown, actions)
+                else -> DashTheme(CarTheme.DEFAULT) {
+                    Column(
+                        Modifier.fillMaxSize().background(Panel).verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (screen == 1) {
+                            // With the guide open, as a new user would first look at it.
+                            SettingsContent(state().copy(trips = drives), shown, actions, startOpen = "GUIDE")
+                        } else {
+                            TripsSection(drives, useMph = false, onShare = { _, _ -> }, onDelete = {})
+                        }
+                    }
+                }
+            }
+        }
+        save("readme-dashboard-$name")
+        screen = 1
+        save("readme-settings-$name")
+        screen = 2
+        save("readme-drives-$name")
+    }
+
     @Test
     fun badNumbersDoNotCrash() {
         show(state(snapshot = driving.copy(speedMps = Double.NaN, totalG = Double.POSITIVE_INFINITY)))

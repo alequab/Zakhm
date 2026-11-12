@@ -39,12 +39,13 @@
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/dashboard-ar.png" alt="لوحة العدادات بالعربية أثناء انتظار إشارة GPS"><p align="center"><b>لوحة العدادات</b></p></td>
-<td width="50%"><img src="docs/images/settings-ar.png" alt="الإعدادات بالعربية"><p align="center"><b>الإعدادات</b></p></td>
+<td width="33%"><img src="docs/images/dashboard-ar.png" alt="لوحة العدادات بالعربية: السرعة 97 كم/س ودائرة قوة G"><p align="center"><b>لوحة العدادات</b></p></td>
+<td width="33%"><img src="docs/images/settings-ar.png" alt="الإعدادات بالعربية ودليل الاستخدام مفتوح"><p align="center"><b>الإعدادات ودليل الاستخدام</b></p></td>
+<td width="33%"><img src="docs/images/drives-ar.png" alt="الرحلات المحفوظة مع أزرار الفتح على الخريطة والمشاركة"><p align="center"><b>الرحلات المحفوظة</b></p></td>
 </tr>
 </table>
 
-<p align="center"><i>التُقطت الصور داخل مبنى والسيارة متوقفة، لذلك ما زال التطبيق ينتظر إشارة GPS ولا تظهر سرعة.</i></p>
+<p align="center"><i>رُسمت هذه الصور من شاشات التطبيق نفسه بقراءات ورحلات تجريبية.</i></p>
 
 ### المزايا
 
@@ -81,6 +82,10 @@
 <td valign="top"><b>OBD-II أسرع</b><br>طلبات أسرع واتصال Bluetooth LE بأولوية عالية، فتصل قراءات السرعة عدة مرات في الثانية.</td>
 <td valign="top"><b>قطع اتصال OBD-II</b><br>زر في الإعدادات يحرر المحوّل لتطبيق آخر، ثم يعيد الاتصال متى شئت.</td>
 </tr>
+<tr>
+<td valign="top"><b>إعدادات مرتبة</b><br>سبع مجموعات تُفتح واحدة في كل مرة، وتعرض كل مجموعة قيمتها الحالية وهي مغلقة، فتتسع الإعدادات كلها في شاشة واحدة.</td>
+<td valign="top"><b>دليل الاستخدام</b><br>خمس خطوات قصيرة في أعلى الإعدادات تشرح التثبيت ومصدر السرعة والقيادة وملء الشاشة وحفظ الرحلات.</td>
+</tr>
 </table>
 
 ### البدء السريع
@@ -97,9 +102,18 @@
 2. انتظر في الخارج حتى تختفي رسالة GPS.
 3. قُد بشكل طبيعي، فتختفي رسالة المعايرة بعد أن تسرّع ثم تبطئ قليلًا، أو تنعطف يمينًا ويسارًا.
 
-إذا حرّكت الهاتف داخل الحامل، فسيعيد التطبيق المعايرة غالبًا من تلقاء نفسه. ويمكنك أيضًا الضغط على أيقونة الإعدادات ثم **معايرة**.
+إذا حرّكت الهاتف داخل الحامل، فسيعيد التطبيق المعايرة غالبًا من تلقاء نفسه. ويمكنك أيضًا الضغط على أيقونة الإعدادات ثم **الأدوات** ثم **معايرة**.
 
-لتغيير الألوان، افتح الإعدادات ثم **المظهر**.
+لتغيير الألوان، افتح الإعدادات ثم **السيارة** ثم **المظهر**.
+
+**حفظ رحلة وفتحها على الخريطة:**
+
+1. افتح الإعدادات ثم **الرحلات** واضغط **تسجيل الرحلة**، وأبقِ التطبيق مفتوحًا على الشاشة أثناء القيادة.
+2. اضغط **إيقاف التسجيل** عند الوصول، فتظهر الرحلة في **الرحلات المحفوظة**.
+3. اضغط **فتح على الخريطة** لتراها في Google Earth، ويجب أن يكون مثبّتًا على الهاتف. لا يفتح تطبيق خرائط Google هذه الملفات.
+4. لرؤية جدار السرعة، فعّل **جدار السرعة (ثلاثي الأبعاد)** من قائمة الرحلة في Google Earth ثم أمل العرض. وللتحليق مع الرحلة، شغّل **التحليق مع الرحلة**.
+
+يحفظ Google Earth كل رحلة يفتحها، فإذا فتحت الرحلة نفسها مرة ثانية يسألك زخم: فتح Google Earth لتجدها في قائمته، أو إرسال نسخة جديدة. ولإرسال الملف إلى حاسوب أو تطبيق خرائط آخر، استخدم **مشاركة KML** أو **مشاركة GPX**.
 
 ### كيف يعمل
 
@@ -131,6 +145,7 @@ flowchart LR
 - قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف. ويستعمل التطبيق اهتزاز السيارة لتصحيح ذلك بعد أن يتعلّم الفرق بوضوح. وفي رحلة مدتها 16 دقيقة، لم يعدّ السيارة واقفة وهي تسير ولا مرة.
 - يحاول التطبيق أيضًا سماع سرعة العجلات التي تبثها بعض السيارات من تلقاء نفسها، ولا يستخدمها إلا بعد مطابقتها لسرعة السيارة. ولم تُسمع في السيارة التي جُرّب عليها.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
+- فُتحت ملفات الرحلات في Google Earth على الويب وعلى هاتف أندرويد. يظهر المسار والعلامات وجدار السرعة على الويب، لكن بطاقات الدفعات القوية لا تُفتح أثناء الجولة هناك. ولم يُجرَّب جدار السرعة ولا الجولة على الهاتف بعد.
 
 <details>
 <summary><b>السرعة من سيارتك</b></summary>
@@ -197,12 +212,13 @@ flowchart LR
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/dashboard-en.png" alt="The dashboard while waiting for a GPS signal"><p align="center"><b>Dashboard</b></p></td>
-<td width="50%"><img src="docs/images/settings-en.png" alt="The settings panel"><p align="center"><b>Settings</b></p></td>
+<td width="33%"><img src="docs/images/dashboard-en.png" alt="The dashboard: 97 km/h and the G-force circle"><p align="center"><b>Dashboard</b></p></td>
+<td width="33%"><img src="docs/images/settings-en.png" alt="Settings with the how-to guide open"><p align="center"><b>Settings and guide</b></p></td>
+<td width="33%"><img src="docs/images/drives-en.png" alt="Saved drives with Open on map and share buttons"><p align="center"><b>Saved drives</b></p></td>
 </tr>
 </table>
 
-<p align="center"><i>Screenshots were taken indoors while parked, so the app is still waiting for a GPS signal and no speed is shown.</i></p>
+<p align="center"><i>These pictures are drawn from the app's own screens with sample readings and drives.</i></p>
 
 ### Features
 
@@ -239,6 +255,10 @@ flowchart LR
 <td valign="top"><b>Faster OBD-II</b><br>Quicker requests and a high-priority Bluetooth LE link, so car speed arrives several times a second.</td>
 <td valign="top"><b>Disconnect OBD-II</b><br>A settings button frees the adapter for another app, then connects again when you want.</td>
 </tr>
+<tr>
+<td valign="top"><b>Tidy settings</b><br>Seven groups that open one at a time, each showing its current value while closed, so all of settings fits on one screen.</td>
+<td valign="top"><b>How-to guide</b><br>Five short steps at the top of settings: mounting, speed source, driving, full screen and saving drives.</td>
+</tr>
 </table>
 
 ### Quick start
@@ -255,9 +275,18 @@ flowchart LR
 2. Wait outside until the GPS message clears.
 3. Drive normally. The calibration message clears once you've sped up and slowed down a little, or turned both ways.
 
-If you move the phone in its mount, the app will usually calibrate again by itself. You can also tap the settings icon, then **Calibrate**.
+If you move the phone in its mount, the app will usually calibrate again by itself. You can also tap the settings icon, then **Tools**, then **Calibrate**.
 
-To change the colours, open settings, then **Theme**.
+To change the colours, open settings, then **Car**, then **Theme**.
+
+**Saving a drive and opening it on a map:**
+
+1. Open settings, then **Drives**, and tap **Record drive**. Keep the app open on screen while you drive.
+2. Tap **Stop recording** when you arrive. The drive appears under **Saved drives**.
+3. Tap **Open on map** to see it in Google Earth, which must be installed on the phone. Google Maps can't open these files.
+4. To see the speed wall, turn on **Speed wall (3D)** in the drive's list in Google Earth, then tilt the view. To fly along the drive, play **Fly along the drive**.
+
+Google Earth keeps every drive it opens, so opening the same drive a second time asks whether to open Google Earth and find it in its list, or send a new copy. To send the file to a computer or another map app, use **Share KML** or **Share GPX**.
 
 ### How it works
 
@@ -285,6 +314,7 @@ flowchart LR
 - GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop. The app uses the car's vibration to correct this once it has clearly learned the difference. On a 16-minute drive, it never took the moving car for parked.
 - The app also listens for the wheel speeds some cars broadcast by themselves, and only uses them after they match the car's speed. They weren't heard on the car it was tried on.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
+- Drive files were opened in Google Earth on the web and on an Android phone. On the web the path, markers and speed wall show, but the hard-push cards don't open during the tour. The speed wall and tour haven't been tried on the phone yet.
 
 <details>
 <summary><b>Speed from your car</b></summary>
