@@ -76,7 +76,7 @@
 </tr>
 <tr>
 <td valign="top"><b>الهاتف في اليد</b><br>عندما تمسك الهاتف، تتوقف قراءة قوة G وأعلى القيم خلال أقل من ثانية، ثم تعود بعد أن تعيده إلى الحامل.</td>
-<td valign="top"><b>يتعلّم كل سيارة</b><br>يقيس تأخر سرعة OBD-II وGPS، ومقدار خطأ عداد السرعة، واهتزاز السيارة واقفة وسائرة، ويحفظ ذلك لكل سيارة.</td>
+<td valign="top"><b>يتعلّم كل سيارة</b><br>يقيس تأخر سرعة OBD-II وGPS، ومقدار خطأ عداد السرعة، واهتزاز السيارة واقفة وسائرة، ويحفظ ذلك لكل سيارة. ويتعلّم أيضًا دقة GPS الحقيقية في هاتفك بمقارنته بسرعة السيارة.</td>
 </tr>
 <tr>
 <td valign="top"><b>OBD-II أسرع</b><br>طلبات أسرع واتصال Bluetooth LE بأولوية عالية، فتصل قراءات السرعة عدة مرات في الثانية.</td>
@@ -249,7 +249,7 @@ flowchart LR
 </tr>
 <tr>
 <td valign="top"><b>Phone in hand</b><br>When you hold the phone, G-force and peaks pause within a second, and come back once it's in the mount again.</td>
-<td valign="top"><b>Learns each car</b><br>Measures how late OBD-II and GPS speeds are, how far off the speedometer reads, and how the car shakes parked and rolling, and keeps it per car.</td>
+<td valign="top"><b>Learns each car</b><br>Measures how late OBD-II and GPS speeds are, how far off the speedometer reads, and how the car shakes parked and rolling, and keeps it per car. It also learns how accurate your phone's GPS really is, by comparing it with the car's speed.</td>
 </tr>
 <tr>
 <td valign="top"><b>Faster OBD-II</b><br>Quicker requests and a high-priority Bluetooth LE link, so car speed arrives several times a second.</td>

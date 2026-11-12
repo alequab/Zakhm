@@ -129,6 +129,9 @@ class TelemetryEngine {
     private var carTiming = SourceTiming()
     private var gpsTiming = SourceTiming()
     private var carScale = SpeedScale()
+
+    /** How much to believe this phone's own GPS accuracy. Kept for the phone, not the car. */
+    private var gpsTrust = GpsTrust()
     private var lastCarFix = Double.NEGATIVE_INFINITY
     private var lastStillnessLearned = Double.NEGATIVE_INFINITY
     private var parkedSince = Double.NaN
@@ -264,6 +267,7 @@ class TelemetryEngine {
         } else {
             measured = reported
             val car = carScale.addGps(fixTime, reported, fix.speedAccuracy)
+            car?.let { gpsTrust.add(reported, it, fix.speedAccuracy) }
             lastGpsCheck = GpsCheck(
                 time = fixTime,
                 gpsSpeed = reported,
@@ -275,7 +279,13 @@ class TelemetryEngine {
             // With the car's own speed coming in, GPS is compared and learned from, not shown.
             if (stamped - lastCarFix <= CAR_FRESH_SECONDS) return
         }
-        val sigma = fix.speedAccuracy?.takeIf { it > 0.0 && it.isFinite() } ?: DEFAULT_GPS_SIGMA
+        val reportedSigma = fix.speedAccuracy?.takeIf { it > 0.0 && it.isFinite() }
+        // A phone's own figure for its GPS can be far too modest; what has been measured counts instead.
+        val sigma = when {
+            reportedSigma == null -> DEFAULT_GPS_SIGMA
+            isCar -> reportedSigma
+            else -> gpsTrust.sigma(reportedSigma)
+        }
         if (sigma > MAX_GPS_SIGMA) return
         if (!inHand && mountWasMoved(fixTime, measured)) {
             resetMount()
@@ -324,6 +334,16 @@ class TelemetryEngine {
      * starting point: a phone tilted differently is caught at the next stop, and a
      * phone turned differently is corrected by fresh forward learning.
      */
+    /** Loads what was learned about this phone's GPS on earlier runs. */
+    fun loadGpsTrust(saved: GpsTrust.Saved?) {
+        gpsTrust = GpsTrust(saved)
+    }
+
+    fun gpsTrust(): GpsTrust.Saved = gpsTrust.saved()
+
+    /** What the phone's reported GPS accuracy is multiplied by, and whether it has been measured yet. */
+    fun gpsTrustScale(): Pair<Double, Boolean> = gpsTrust.scale to gpsTrust.learned
+
     fun loadCar(mount: MountCalibration?, savedPeaks: Peaks, learned: LearnedCar = LearnedCar()) {
         resetMount()
         stillnessModel = StillnessModel(learned.stillness)
@@ -578,11 +598,14 @@ class TelemetryEngine {
     /** One line on everything learned so far, for the debug log. */
     fun learningSummary(): String =
         "still={${stillnessModel.describe()}} now=$lastStillness obd={${carTiming.describe()}} " +
-            "gps={${gpsTiming.describe()}} scale=%.4f learned=%s samples=%d".format(
+            "gps={${gpsTiming.describe()}} scale=%.4f learned=%s samples=%d gpsTrust=%.3f learned=%s samples=%d".format(
                 java.util.Locale.US,
                 carScale.factor,
                 carScale.learned != null,
                 carScale.sampleCount,
+                gpsTrust.scale,
+                gpsTrust.learned,
+                gpsTrust.sampleCount,
             )
 
     private fun onStopped(w: WindowStats) {

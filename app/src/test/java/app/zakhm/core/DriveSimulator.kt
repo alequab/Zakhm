@@ -35,6 +35,8 @@ class DriveSimulator(
     private val gyroNoise: Double = 0.003,
     private val gpsNoise: Double = 0.15,
     private val gpsLatency: Double = 0.3,
+    /** The speed accuracy the GPS claims, whatever its real noise. */
+    private val gpsReportedAccuracy: Double = 0.3,
     /** Strength of a running engine's 25 Hz shake, in m/s^2. */
     private val idleVibration: Double = 0.0,
     /** Strength of someone slowly moving the phone around by hand, in m/s^2. */
@@ -129,7 +131,7 @@ class DriveSimulator(
             nextGpsTime += 1.0
             if (gpsEnabled) {
                 val measured = (speedAgo(gpsSpeedLag) + gpsError + random.nextGaussian() * gpsNoise).coerceAtLeast(0.0)
-                pendingFixes.addLast(SpeedFix(time, measured, 0.3, 4.0))
+                pendingFixes.addLast(SpeedFix(time, measured, gpsReportedAccuracy, 4.0))
             }
         }
         if (obd != null && time >= nextObdTime) {

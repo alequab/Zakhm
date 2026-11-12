@@ -22,6 +22,7 @@ import app.zakhm.core.CarRegistry
 import app.zakhm.core.CarTheme
 import app.zakhm.core.DriveLog
 import app.zakhm.core.FixSource
+import app.zakhm.core.GpsTrust
 import app.zakhm.core.SpeedFix
 import app.zakhm.core.SpeedInput
 import app.zakhm.core.SpeedRouter
@@ -329,7 +330,32 @@ class TelemetryController(private val context: Context) {
         publish()
     }
 
+    /** What was learned about this phone's GPS. It belongs to the phone, so it is kept apart from the cars. */
+    // Lazy: the background thread can reach it before the constructor gets this far.
+    private val gpsTrustStore by lazy { context.getSharedPreferences("gps_trust", Context.MODE_PRIVATE) }
+
+    private fun loadGpsTrust() {
+        if (!gpsTrustStore.contains(KEY_TRUST_SAMPLES)) return
+        engine.loadGpsTrust(
+            GpsTrust.Saved(
+                errorSquares = gpsTrustStore.getFloat(KEY_TRUST_ERRORS, 0f).toDouble(),
+                reportedSquares = gpsTrustStore.getFloat(KEY_TRUST_REPORTED, 0f).toDouble(),
+                samples = gpsTrustStore.getInt(KEY_TRUST_SAMPLES, 0),
+            ),
+        )
+    }
+
+    private fun saveGpsTrust() {
+        val trust = engine.gpsTrust()
+        gpsTrustStore.edit()
+            .putFloat(KEY_TRUST_ERRORS, trust.errorSquares.toFloat())
+            .putFloat(KEY_TRUST_REPORTED, trust.reportedSquares.toFloat())
+            .putInt(KEY_TRUST_SAMPLES, trust.samples)
+            .apply()
+    }
+
     private fun loadCars() {
+        loadGpsTrust()
         val saved = carStore.load()
         cars = if (saved != null) {
             CarRegistry(saved.cars, saved.activeId, ::newCarId)
@@ -358,6 +384,7 @@ class TelemetryController(private val context: Context) {
 
     private fun saveCars() {
         captureActiveCar()
+        saveGpsTrust()
         carStore.save(cars.cars, cars.active.id)
     }
 
@@ -615,6 +642,9 @@ class TelemetryController(private val context: Context) {
         const val RECORDER_FLUSH_INTERVAL_MS = 5000L
         const val MAX_TRIP_POSITION_ERROR_M = 50f
         const val CAR_NOTICE_MS = 6000L
+        const val KEY_TRUST_ERRORS = "error_squares"
+        const val KEY_TRUST_REPORTED = "reported_squares"
+        const val KEY_TRUST_SAMPLES = "samples"
 
         /** OBD reports whole km/h, and wheel speed carries some error of its own. */
         const val OBD_SPEED_SIGMA = 0.3f
