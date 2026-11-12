@@ -20,6 +20,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -333,6 +334,8 @@ class ScreenRenderTest {
     fun savedDrives() {
         showDrives(listOf(trip("a", 12, 8_400.0), trip("b", 95, 121_300.0), trip("c", 4, 900.0), trip("d", 30, 22_000.0)))
         compose.onNodeWithText("Show all (4)").assertExists()
+        compose.onAllNodes(hasText("Open on map")).assertCountEquals(3)
+        compose.onAllNodes(hasText("Share KML")).assertCountEquals(3)
         save("drives")
         compose.onNodeWithText("Show all (4)").performClick()
         compose.onNodeWithText("Show all (4)").assertDoesNotExist()

@@ -2,6 +2,7 @@ package app.zakhm
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.app.Application
 import android.app.LocaleManager
 import android.bluetooth.BluetoothAdapter
@@ -47,6 +48,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class TelemetryViewModel(application: Application) : AndroidViewModel(application) {
     val controller = TelemetryController(application)
@@ -222,6 +226,7 @@ class MainActivity : ComponentActivity() {
             setGView = ::setGViewMode,
             setGRange = ::setGRangeChoice,
             shareTrip = ::shareTrip,
+            openTrip = ::openTrip,
             deleteTrip = { controller.deleteTrip(it) },
         )
     }
@@ -392,35 +397,85 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.share_title)))
     }
 
-    /** Writes the drive as a map file and offers it to other apps, to open or to send on. */
+    /**
+     * Opens the drive in a map app on this phone, such as Google Earth. Earth keeps each
+     * file it opens and won't show the same one again, so a drive sent before asks first,
+     * instead of quietly adding another copy to Earth every time.
+     */
+    private fun openTrip(trip: SavedTrip) {
+        if (trip.file.name !in openedTrips()) {
+            sendToMap(trip, fresh = false)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.drive_in_earth_title)
+            .setMessage(R.string.drive_in_earth_body)
+            .setPositiveButton(R.string.drive_open_earth) { _, _ -> openMapApp() }
+            .setNeutralButton(R.string.drive_new_copy) { _, _ -> sendToMap(trip, fresh = true) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun openedTrips(): Set<String> = preferences.getStringSet(KEY_OPENED_TRIPS, null).orEmpty()
+
+    private fun sendToMap(trip: SavedTrip, fresh: Boolean) {
+        try {
+            val open = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(exportTrip(trip, TripFormat.KML, fresh), TripFormat.KML.mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(open)
+            preferences.edit().putStringSet(KEY_OPENED_TRIPS, openedTrips() + trip.file.name).apply()
+        } catch (_: ActivityNotFoundException) {
+            // Google Maps doesn't open these files, so many phones have nothing that does.
+            Toast.makeText(this, R.string.drive_no_map_app, Toast.LENGTH_LONG).show()
+        } catch (_: IOException) {
+            Toast.makeText(this, R.string.drive_export_error, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Opens the app that takes drive files at its own start, where it lists the files it saved. */
+    private fun openMapApp() {
+        val probe = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(Uri.parse("content://$packageName.files/drive.kml"), TripFormat.KML.mime)
+        val app = packageManager.queryIntentActivities(probe, 0).firstOrNull()?.activityInfo?.packageName
+        val launch = app?.let { packageManager.getLaunchIntentForPackage(it) }
+        if (launch != null) startActivity(launch) else Toast.makeText(this, R.string.drive_no_map_app, Toast.LENGTH_LONG).show()
+    }
+
+    /** Offers the drive's map file to other apps, to send or save it. */
     private fun shareTrip(trip: SavedTrip, format: TripFormat) {
         try {
-            val points = TripStore.read(trip.file)
-            val text = tripText(this, trip.summary, useMph)
-            val body = if (format == TripFormat.KML) TripExport.kml(points, text) else TripExport.gpx(points, text)
-            val dir = File(cacheDir, "export")
-            if (!dir.isDirectory && !dir.mkdirs()) throw IOException()
-            // Only the newest is kept: each holds a whole drive's path.
-            dir.listFiles()?.forEach { it.delete() }
-            val file = File(dir, trip.file.nameWithoutExtension + format.extension)
-            file.writeText(body)
-            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val uri = exportTrip(trip, format)
             val send = Intent(Intent.ACTION_SEND)
                 .setType(format.mime)
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             // Without this the share sheet itself may not read the file, and shows no name for it.
             send.clipData = ClipData.newRawUri(null, uri)
-            // So map apps on this phone are offered too, not only ways to send the file.
-            val open = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, format.mime)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            val chooser = Intent.createChooser(send, getString(R.string.share_trip_title))
-                .putExtra(Intent.EXTRA_ALTERNATE_INTENTS, arrayOf(open))
-            startActivity(chooser)
+            startActivity(Intent.createChooser(send, getString(R.string.share_trip_title)))
         } catch (_: IOException) {
             Toast.makeText(this, R.string.drive_export_error, Toast.LENGTH_LONG).show()
         }
+    }
+
+    /**
+     * Writes the drive as a map file that other apps may read. Google Earth keeps every
+     * file it is given and won't show one it has seen before, so a file to open gets a
+     * name of its own each time ([fresh]).
+     */
+    @Throws(IOException::class)
+    private fun exportTrip(trip: SavedTrip, format: TripFormat, fresh: Boolean = false): Uri {
+        val points = TripStore.read(trip.file)
+        val text = tripText(this, trip.summary, useMph)
+        val body = if (format == TripFormat.KML) TripExport.kml(points, text) else TripExport.gpx(points, text)
+        val dir = File(cacheDir, "export")
+        if (!dir.isDirectory && !dir.mkdirs()) throw IOException()
+        // Only the newest is kept: each holds a whole drive's path.
+        dir.listFiles()?.forEach { it.delete() }
+        val opened = if (fresh) SimpleDateFormat("-HHmmss", Locale.US).format(Date()) else ""
+        val file = File(dir, trip.file.nameWithoutExtension + opened + format.extension)
+        file.writeText(body)
+        return FileProvider.getUriForFile(this, "$packageName.files", file)
     }
 
     private companion object {
@@ -430,6 +485,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_G_RANGE = "g_range"
         const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
         const val KEY_ASKED_LOCATION = "asked_location"
+        const val KEY_OPENED_TRIPS = "opened_trips"
         const val SCAN_DURATION_MS = 10_000L
         val BLUETOOTH_PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
     }

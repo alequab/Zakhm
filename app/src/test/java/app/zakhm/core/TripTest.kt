@@ -148,10 +148,14 @@ class TripTest {
         }
         val kml = TripExport.kml(points, text)
         val doc = parse(kml)
-        val lines = doc.getElementsByTagName("LineString").length
+        // The path itself; the speed wall repeats it raised, with extrude.
+        val path = (0 until doc.getElementsByTagName("LineString").length)
+            .map { doc.getElementsByTagName("LineString").item(it) as org.w3c.dom.Element }
+            .filter { it.getElementsByTagName("extrude").length == 0 }
+        val lines = path.size
         assertEquals("one stretch per colour", 8, lines)
         // Every stretch starts where the one before ended, so the path has no holes.
-        val stretches = (0 until lines).map { (doc.getElementsByTagName("LineString").item(it) as org.w3c.dom.Element).getElementsByTagName("coordinates").item(0).textContent.trim().split(' ') }
+        val stretches = path.map { it.getElementsByTagName("coordinates").item(0).textContent.trim().split(' ') }
         stretches.zipWithNext().forEach { (a, b) -> assertEquals(a.last(), b.first()) }
         assertEquals(80, stretches.sumOf { it.size } - (lines - 1))
         assertTrue(kml.contains("Braking 0.50 G"))
@@ -183,8 +187,44 @@ class TripTest {
         assertEquals("bounce", doc.getElementsByTagNameNS(gx, "flyToMode").item(flights - 1).textContent)
         // Hard pushes carry a time, so they appear as the car reaches them; the summary is a table.
         assertEquals(1, doc.getElementsByTagName("TimeStamp").length)
-        assertTrue(doc.getElementsByTagName("description").item(0).textContent.contains("<td><b>Distance</b></td><td>6.0 km</td>"))
+        assertEquals("Distance: 6.0 km", doc.getElementsByTagName("description").item(0).textContent)
+        assertTrue(doc.getElementsByTagName("description").item(1).textContent.startsWith("<table"))
         assertEquals(4, doc.getElementsByTagName("StyleMap").length)
+    }
+
+    @Test
+    fun theTourOpensEachHardPushCardAndClosesItAtTheNextStep() {
+        val points = drive(300, g = { if (it == 100) -0.5 to 0.0 else if (it == 200) 0.0 to 0.6 else 0.0 to 0.0 })
+        val doc = parse(TripExport.kml(points, text))
+        val gx = "http://www.google.com/kml/ext/2.2"
+        val shown = doc.getElementsByTagNameNS(gx, "balloonVisibility")
+        assertEquals(4, shown.length)
+        assertEquals(listOf("1", "0", "1", "0"), (0 until 4).map { shown.item(it).textContent })
+        // Each card the tour opens belongs to a marker with that id.
+        val targets = (0 until 4).map { (shown.item(it).parentNode as org.w3c.dom.Element).getAttribute("targetId") }
+        assertEquals(listOf("event0", "event0", "event1", "event1"), targets)
+        val ids = (0 until doc.getElementsByTagName("Placemark").length)
+            .map { (doc.getElementsByTagName("Placemark").item(it) as org.w3c.dom.Element).getAttribute("id") }
+        assertTrue(ids.containsAll(listOf("event0", "event1")))
+        // The braking marker's values are data too.
+        val data = doc.getElementsByTagName("Data")
+        val keys = (0 until data.length).map { (data.item(it) as org.w3c.dom.Element).getAttribute("name") }
+        assertTrue(keys.containsAll(listOf("g_force", "speed", "time")))
+    }
+
+    @Test
+    fun theSpeedWallStandsAsTallAsTheSpeedAndStartsHidden() {
+        val doc = parse(TripExport.kml(drive(60, speedMps = 20.0), text))
+        val walls = (0 until doc.getElementsByTagName("LineString").length)
+            .map { doc.getElementsByTagName("LineString").item(it) as org.w3c.dom.Element }
+            .filter { it.getElementsByTagName("extrude").length == 1 }
+        assertEquals(1, walls.size)
+        assertEquals("relativeToGround", walls[0].getElementsByTagName("altitudeMode").item(0).textContent)
+        // 20 m/s stands 100 m tall.
+        assertEquals("46.000000,24.000000,100", walls[0].getElementsByTagName("coordinates").item(0).textContent.trim().split(' ')[0])
+        val folder = walls[0].parentNode.parentNode as org.w3c.dom.Element
+        assertEquals("Speed wall (3D)", folder.getElementsByTagName("name").item(0).textContent)
+        assertEquals("0", folder.getElementsByTagName("visibility").item(0).textContent)
     }
 
     @Test

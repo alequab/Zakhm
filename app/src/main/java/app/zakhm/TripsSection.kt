@@ -95,6 +95,7 @@ internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean): 
         driveFolder = context.getString(R.string.trip_drive_folder),
         tourName = context.getString(R.string.trip_tour),
         timelineName = context.getString(R.string.trip_timeline),
+        wallName = context.getString(R.string.trip_wall),
         rightToLeft = context.resources.configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL,
     name = context.getString(R.string.trip_file_name, tripTitle(context, summary)),
     description = tripDetails(context, summary, useMph),
@@ -118,6 +119,7 @@ internal fun TripsSection(
     useMph: Boolean,
     onShare: (SavedTrip, TripFormat) -> Unit,
     onDelete: (SavedTrip) -> Unit,
+    onOpen: (SavedTrip) -> Unit = {},
 ) {
     val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
@@ -131,9 +133,10 @@ internal fun TripsSection(
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(tripTitle(context, trip.summary), color = Primary, fontSize = DashType.Body, fontWeight = FontWeight.SemiBold)
             Text(tripDetails(context, trip.summary, useMph), color = Secondary, fontSize = DashType.Body)
+            CompactButton(stringResource(R.string.drive_open), { onOpen(trip) }, Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton(stringResource(R.string.drive_kml), { onShare(trip, TripFormat.KML) }, Modifier.weight(1f))
-                CompactButton(stringResource(R.string.drive_gpx), { onShare(trip, TripFormat.GPX) }, Modifier.weight(1f))
+                CompactButton(stringResource(R.string.drive_share, stringResource(R.string.drive_kml)), { onShare(trip, TripFormat.KML) }, Modifier.weight(1f))
+                CompactButton(stringResource(R.string.drive_share, stringResource(R.string.drive_gpx)), { onShare(trip, TripFormat.GPX) }, Modifier.weight(1f))
                 CompactButton(stringResource(R.string.car_delete), { deleting = trip }, Modifier.weight(1f))
             }
         }

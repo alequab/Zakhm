@@ -181,6 +181,7 @@ class ScreenActions(
     val setGRange: (Double) -> Unit = {},
     val shareTrip: (SavedTrip, TripFormat) -> Unit = { _, _ -> },
     val deleteTrip: (SavedTrip) -> Unit = {},
+    val openTrip: (SavedTrip) -> Unit = {},
 )
 
 
@@ -1050,7 +1051,7 @@ internal fun SettingsContent(
             }
         }
         state.recordingError?.let { Text(it, color = Alert, fontSize = DashType.Label) }
-        TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip)
+        TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip, actions.openTrip)
     }
 
     group(SettingsGroup.TOOLS, R.string.section_tools, stringResource(R.string.tools_summary)) {

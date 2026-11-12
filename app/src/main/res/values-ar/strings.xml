@@ -161,18 +161,25 @@
     <string name="guide_step_source">اختر مصدر السرعة من قسم مصدر السرعة. GPS الهاتف لا يحتاج إلى شيء إضافي.</string>
     <string name="guide_step_drive">قُد السيارة. تظهر السرعة فورًا، وتظهر قوة G بعد أن يشعر التطبيق بتسارع السيارة وفرملتها وانعطافها، خلال نصف دقيقة غالبًا.</string>
     <string name="guide_step_focus">اضغط على عداد السرعة أو دائرة G ليملأ الشاشة. اضغط مرة أخرى لترى الاثنين.</string>
-    <string name="guide_step_record">لحفظ رحلة، افتح قسم الرحلات واضغط تسجيل الرحلة، ثم أوقف التسجيل عند الوصول. افتحها من الرحلات المحفوظة بصيغة KML في Google Earth أو بصيغة GPX في تطبيقات الخرائط الأخرى.</string>
+    <string name="guide_step_record">لحفظ رحلة، افتح قسم الرحلات واضغط تسجيل الرحلة، ثم أوقف التسجيل عند الوصول. ثم اضغط فتح على الخريطة في الرحلات المحفوظة لتراها في Google Earth.</string>
     <string name="guide_note">إذا أمسكت الهاتف أو حرّكته، تتوقف قراءة قوة G ثم تعود بنفسها.</string>
-    <string name="drives_hint">كل رحلة تسجّلها تُحفظ هنا بمسارها وسرعتها وقوة G. افتحها بصيغة KML في Google Earth لترى المسار ملوّنًا حسب السرعة مع علامات عند الدفعات القوية، وتعيد تشغيلها على شريط الزمن وتحلّق معها، أو بصيغة GPX في أغلب تطبيقات الخرائط. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
+    <string name="drives_hint">كل رحلة تسجّلها تُحفظ هنا بمسارها وسرعتها وقوة G. زر فتح على الخريطة يعرضها في Google Earth، ويجب أن يكون مثبّتًا: المسار ملوّن حسب السرعة، مع علامات عند الدفعات القوية، وجولة تحليق تعرض كل دفعة قوية، وجدار للسرعة يُفعَّل في العرض ثلاثي الأبعاد. ومشاركة KML أو GPX ترسل الملف إلى حاسوب أو تطبيق خرائط آخر. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
     <string name="drives_none">لا توجد رحلات بعد.</string>
     <string name="drives_show_all">عرض الكل (%1$d)</string>
+    <string name="drive_open">فتح على الخريطة</string>
+    <string name="drive_in_earth_title">موجودة في Google Earth</string>
+    <string name="drive_in_earth_body">حفظ Google Earth هذه الرحلة أول مرة فتحها، ولن يفتح الملف نفسه مرة أخرى. ابحث عنها في قائمة الملفات المحفوظة في Google Earth، أو أرسل نسخة جديدة. النسخة الجديدة تضيف عنصرًا آخر إلى تلك القائمة.</string>
+    <string name="drive_open_earth">فتح Google Earth</string>
+    <string name="drive_new_copy">نسخة جديدة</string>
+    <string name="drive_share">مشاركة %1$s</string>
+    <string name="drive_no_map_app">لا يوجد على هذا الهاتف تطبيق يفتح ملفات الرحلات. ثبّت Google Earth ثم اضغط فتح على الخريطة مرة أخرى. خرائط Google لا تفتحها.</string>
     <string name="drive_minutes">%1$d د</string>
     <string name="drive_hours">%1$d س %2$02d د</string>
     <string name="drive_details">%1$s · %2$s · الأعلى %3$s · %4$s G</string>
     <string name="drive_delete_title">حذف هذه الرحلة؟</string>
     <string name="drive_delete_body">ستُحذف رحلة %1$s من هذا الهاتف.</string>
     <string name="drive_export_error">تعذّر إنشاء ملف الخريطة</string>
-    <string name="share_trip_title">فتح الرحلة أو مشاركتها</string>
+    <string name="share_trip_title">مشاركة الرحلة</string>
     <string name="unit_km">كم</string>
     <string name="unit_mi">ميل</string>
     <string name="trip_file_name">زخم %1$s</string>
@@ -195,6 +202,7 @@
     <string name="trip_drive_folder">الرحلة</string>
     <string name="trip_tour">التحليق مع الرحلة</string>
     <string name="trip_timeline">السيارة على شريط الزمن</string>
+    <string name="trip_wall">جدار السرعة (ثلاثي الأبعاد)</string>
 
     <string name="auto_needs_permission">يحتاج التطبيق إلى إذن لقراءة سرعة هذه السيارة. توقف ثم اسمح بذلك.</string>
     <string name="auto_sending">تُرسل سرعة السيارة إلى هاتفك. أبقِ التطبيق مفتوحًا على الهاتف لرؤيتها.</string>
