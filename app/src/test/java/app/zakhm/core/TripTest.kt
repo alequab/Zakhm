@@ -35,6 +35,10 @@ class TripTest {
             TripPoint(1_700_000_000_000 + i * 1000L, 24.0 + i * speedMps / 111_195.0, 46.0, speedMps, forward, side)
         }
 
+    /** The style a line's placemark uses. */
+    private fun styleOf(line: org.w3c.dom.Element) =
+        (line.parentNode as org.w3c.dom.Element).getElementsByTagName("styleUrl").item(0)?.textContent.orEmpty()
+
     private fun parse(xml: String) =
         DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }.newDocumentBuilder().parse(InputSource(StringReader(xml)))
 
@@ -148,10 +152,10 @@ class TripTest {
         }
         val kml = TripExport.kml(points, text)
         val doc = parse(kml)
-        // The path itself; the speed wall repeats it raised, with extrude.
+        // The path itself; the speed wall and the G-force layer repeat it in their own styles.
         val path = (0 until doc.getElementsByTagName("LineString").length)
             .map { doc.getElementsByTagName("LineString").item(it) as org.w3c.dom.Element }
-            .filter { it.getElementsByTagName("extrude").length == 0 }
+            .filter { line -> styleOf(line).startsWith("#speed") }
         val lines = path.size
         assertEquals("one stretch per colour", 8, lines)
         // Every stretch starts where the one before ended, so the path has no holes.
@@ -175,18 +179,18 @@ class TripTest {
         assertEquals(300, doc.getElementsByTagName("when").length - doc.getElementsByTagName("TimeStamp").length)
         assertEquals(300, doc.getElementsByTagNameNS(gx, "coord").length)
         assertEquals("46.000000 24.000000 0", doc.getElementsByTagNameNS(gx, "coord").item(0).textContent)
-        assertEquals(3, doc.getElementsByTagNameNS(gx, "SimpleArrayData").length)
-        assertEquals(900, doc.getElementsByTagNameNS(gx, "value").length)
+        assertEquals(4, doc.getElementsByTagNameNS(gx, "SimpleArrayData").length)
+        assertEquals(1200, doc.getElementsByTagNameNS(gx, "value").length)
         assertEquals("72.0", doc.getElementsByTagNameNS(gx, "value").item(0).textContent)
         // The tour: a bounded number of steps, heading north like the drive, ending on the overview.
         val flights = doc.getElementsByTagNameNS(gx, "FlyTo").length
         assertTrue("flights: $flights", flights in 20..(92))
-        val headings = doc.getElementsByTagName("heading")
-        assertEquals("0.0", headings.item(1).textContent)
+        val firstStep = doc.getElementsByTagNameNS(gx, "FlyTo").item(1) as org.w3c.dom.Element
+        assertEquals("0.0", firstStep.getElementsByTagName("heading").item(0).textContent)
         assertEquals("smooth", doc.getElementsByTagNameNS(gx, "flyToMode").item(1).textContent)
         assertEquals("bounce", doc.getElementsByTagNameNS(gx, "flyToMode").item(flights - 1).textContent)
-        // Hard pushes carry a time, so they appear as the car reaches them; the summary is a table.
-        assertEquals(1, doc.getElementsByTagName("TimeStamp").length)
+        // Hard pushes and the 5 km posts carry a time, so they appear as the car reaches them.
+        assertEquals(6, doc.getElementsByTagName("TimeStamp").length)
         assertEquals("Distance: 6.0 km", doc.getElementsByTagName("description").item(0).textContent)
         assertTrue(doc.getElementsByTagName("description").item(1).textContent.startsWith("<table"))
         assertEquals(4, doc.getElementsByTagName("StyleMap").length)
@@ -279,6 +283,174 @@ class TripTest {
         java.io.File(dir, "sample.kml").writeText(TripExport.kml(points, text))
         java.io.File(dir, "sample.gpx").writeText(TripExport.gpx(points, text))
         assertEquals(4, Trips.events(points).count { it.kind == GEventKind.BRAKING || it.kind == GEventKind.SPEEDING_UP })
+    }
+
+    /** Points one second apart with the given speeds, heading north. */
+    private fun speeds(vararg mps: Double, from: Long = 1_700_000_000_000): List<TripPoint> {
+        var latitude = 24.0
+        return mps.mapIndexed { i, v ->
+            if (i > 0) latitude += (mps[i - 1] + v) / 2 / 111_195.0
+            TripPoint(from + i * 1000L, latitude, 46.0, v, 0.0, 0.0)
+        }
+    }
+
+    private fun folder(doc: org.w3c.dom.Document, name: String): org.w3c.dom.Element? =
+        (0 until doc.getElementsByTagName("Folder").length)
+            .map { doc.getElementsByTagName("Folder").item(it) as org.w3c.dom.Element }
+            .firstOrNull { it.getElementsByTagName("name").item(0).textContent == name }
+
+    private fun placemarkNames(folder: org.w3c.dom.Element?): List<String> {
+        val marks = folder?.getElementsByTagName("Placemark") ?: return emptyList()
+        return (0 until marks.length).mapNotNull { (marks.item(it) as org.w3c.dom.Element).getElementsByTagName("name").item(0)?.textContent }
+    }
+
+    @Test
+    fun theNewColumnsReadBackAndOldFilesStillOpen() {
+        val point = TripPoint(1_700_000_000_000, 24.5, 46.5, 10.0, 0.1, -0.2, altitudeM = 612.4, accuracyM = 4.5, speedFrom = SpeedInput.OBD)
+        assertEquals(listOf(point), TripFile.parse(sequenceOf(TripFile.HEADER, TripFile.line(point))))
+        // A drive saved by 1.6.1 or earlier.
+        val old = TripFile.parse(sequenceOf("time_ms,lat,lon,speed_mps,forward_g,side_g", "5,24.0,46.0,1.00,0.000,0.000"))
+        assertEquals(listOf(TripPoint(5, 24.0, 46.0, 1.0, 0.0, 0.0)), old)
+        assertNull(Trips.summary(old)!!.climbM)
+        assertNull(Trips.summary(old)!!.carSpeedShare)
+    }
+
+    @Test
+    fun stopsInTheMiddleAreFoundAndWaitingAtTheEndsIsNot() {
+        val still = DoubleArray(40) { 0.0 }
+        val moving = DoubleArray(30) { 15.0 }
+        val points = speeds(*(DoubleArray(10) { 0.0 } + moving + still + moving + DoubleArray(25) { 0.0 }))
+        val stops = Trips.stops(points)
+        assertEquals(1, stops.size)
+        assertEquals(39, stops[0].seconds)
+        assertEquals(points[40], stops[0].from)
+        // Short waits are no stop at all.
+        assertTrue(Trips.stops(speeds(*(moving + DoubleArray(10) { 0.0 } + moving))).isEmpty())
+        // Every still second counts against moving time.
+        val summary = Trips.summary(points)!!
+        assertEquals(summary.durationS - 9 - 39 - 24, summary.movingS)
+    }
+
+    @Test
+    fun aLaunchIsTimedToEachTargetBetweenPoints() {
+        // 3 m/s every second from standstill: 60 km/h at 5.56 s, 80 at 7.41 s, 100 at 9.26 s.
+        val points = speeds(*(DoubleArray(5) { 0.0 } + DoubleArray(12) { (it + 1) * 3.0 } + DoubleArray(20) { 36.0 }))
+        val launches = Trips.launches(points, listOf(60.0, 80.0, 100.0).map { it / 3.6 })
+        assertEquals(1, launches.size)
+        assertEquals(points[4], launches[0].start)
+        assertEquals(listOf(5.56, 7.41, 9.26), launches[0].reached.map { Math.round(it.second * 100) / 100.0 })
+        // Easing off before 60 is no launch.
+        val gentle = speeds(*(DoubleArray(3) { 0.0 } + doubleArrayOf(3.0, 6.0, 9.0, 12.0, 8.0, 8.0)))
+        assertTrue(Trips.launches(gentle, listOf(60.0 / 3.6)).isEmpty())
+    }
+
+    @Test
+    fun aHardBrakingKnowsItsSpeedsAndDistance() {
+        // 25 m/s down to standstill at 5 m/s² takes 62.5 m.
+        val speedsList = DoubleArray(10) { 25.0 } + DoubleArray(6) { 25.0 - it * 5.0 } + DoubleArray(5) { 0.0 }
+        val points = speeds(*speedsList).mapIndexed { i, p -> if (i in 10..15 && i > 10) p.copy(forwardG = if (i == 12) -0.51 else -0.45) else p }
+        val brakings = Trips.brakings(points)
+        assertEquals(1, brakings.size)
+        assertEquals(25.0, brakings[0].from.speedMps!!, 1e-9)
+        assertEquals(0.0, brakings[0].to.speedMps!!, 1e-9)
+        assertEquals(62.5, brakings[0].distanceM, 0.01)
+        val kml = TripExport.kml(points, text)
+        assertTrue(kml.contains("<Data name=\"speed_before\"><displayName>Speed before</displayName><value>90 km/h</value></Data>"))
+        assertTrue(kml.contains("<Data name=\"speed_after\"><displayName>Speed after</displayName><value>0 km/h</value></Data>"))
+        assertTrue(kml.contains("<Data name=\"braking_distance\"><displayName>Braking distance</displayName><value>63 m</value></Data>"))
+    }
+
+    @Test
+    fun distancePostsStandAtEachWholeUnit() {
+        val posts = Trips.distancePosts(drive(301), 1000.0)
+        assertEquals(listOf(1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0), posts.map { it.distanceM })
+        // 20 m/s: the first kilometre is passed at 50 s.
+        assertEquals(1_700_000_050_000, posts[0].point.timeMs)
+        val doc = parse(TripExport.kml(drive(301), text))
+        assertEquals(listOf("1 km", "2 km", "3 km", "4 km", "5 km", "6 km"), placemarkNames(folder(doc, "Distance posts")))
+        assertTrue(TripExport.kml(drive(301), text).contains("<value>72 km/h</value>"))
+    }
+
+    @Test
+    fun summaryAddsTotalGClimbAndCarShare() {
+        val points = drive(10, g = { if (it == 4) 0.3 to 0.4 else 0.0 to 0.0 }).mapIndexed { i, p ->
+            p.copy(
+                // Wobbling by a metre or two isn't a climb; the 20 m rise is.
+                altitudeM = if (i < 5) 600.0 + (i % 2) * 2 else 620.0,
+                speedFrom = if (i < 8) SpeedInput.OBD else SpeedInput.PHONE,
+            )
+        }
+        val summary = Trips.summary(points)!!
+        assertEquals(0.5, summary.strongestCombinedG, 1e-9)
+        assertEquals(0.4, summary.strongestG, 1e-9)
+        assertEquals(20.0, summary.climbM!!, 1e-9)
+        assertEquals(0.8, summary.carSpeedShare!!, 1e-9)
+    }
+
+    @Test
+    fun theKmlHasEveryNewLayer() {
+        // Off, a launch, a stop, GPS lost for 40 s with a weak stretch after, and on again.
+        val launch = speeds(*(DoubleArray(3) { 0.0 } + DoubleArray(10) { (it + 1) * 3.0 } + DoubleArray(60) { 30.0 }))
+        val stop = speeds(*(DoubleArray(30) { 0.0 } + DoubleArray(30) { 20.0 }), from = launch.last().timeMs + 1000)
+            // Carries on from where the launch ended.
+            .map { it.copy(latitude = it.latitude - 24.0 + launch.last().latitude) }
+        val after = speeds(*DoubleArray(60) { 20.0 }, from = stop.last().timeMs + 40_000).mapIndexed { i, p ->
+            p.copy(latitude = p.latitude + 0.05, accuracyM = if (i < 10) 25.0 else 4.0, altitudeM = 600.0, speedFrom = SpeedInput.OBD)
+        }
+        val points = launch + stop + after
+        val kml = TripExport.kml(points, text, legendSize = 210 to 340)
+        val doc = parse(kml)
+
+        // Named by the fastest target reached; pulling away after the stop only passes 60.
+        assertEquals(listOf("0–100 km/h 9.3 s", "0–60 km/h 0.8 s"), placemarkNames(folder(doc, "Launches")))
+        assertTrue(kml.contains("<displayName>0–60 km/h</displayName><value>5.6 s</value>"))
+        assertEquals(listOf("Stopped 29 s"), placemarkNames(folder(doc, "Stops")))
+        // A marker and a thin line across the gap.
+        assertEquals(listOf("GPS lost 40 s", "GPS lost 40 s"), placemarkNames(folder(doc, "GPS signal lost")))
+        assertEquals(1, folder(doc, "Weak GPS")!!.getElementsByTagName("LineString").length)
+        assertTrue(kml.contains("<td><b>GPS accuracy</b></td><td>± 25 m</td>"))
+        // The car heads north, so do the arrows.
+        val arrows = folder(doc, "Direction")!!.getElementsByTagName("heading")
+        assertTrue(arrows.length > 2)
+        assertTrue((0 until arrows.length).map { arrows.item(it).textContent }.toString(), (0 until arrows.length).all { arrows.item(it).textContent == "0" })
+        // The G-force path starts hidden; the legend sits in the corner.
+        assertEquals("0", folder(doc, "Path by G-force")!!.getElementsByTagName("visibility").item(0).textContent)
+        assertEquals("files/legend.png", (doc.getElementsByTagName("ScreenOverlay").item(0) as org.w3c.dom.Element).getElementsByTagName("href").item(0).textContent)
+        // Markers after the gap know their height and where the speed came from.
+        assertTrue(kml.contains("<Data name=\"height\"><displayName>Height</displayName><value>600 m</value></Data>"))
+        assertTrue(kml.contains("<Data name=\"speed_from\"><displayName>Speed from</displayName><value>OBD</value></Data>"))
+        assertTrue(kml.contains("<gx:coord>46.000000 24."))
+        assertFalse(TripExport.kml(points, text).contains("ScreenOverlay"))
+        // Every icon is packed in the file, not fetched from the internet.
+        assertFalse(kml.contains("http://maps.google.com"))
+    }
+
+    @Test
+    fun aKmzHoldsTheKmlFirstThenItsPictures() {
+        val bytes = java.io.ByteArrayOutputStream()
+        // Only a PNG's header is read: 200 by 300 pixels.
+        val header = ByteArray(24).also { it[19] = 200.toByte(); it[22] = 1; it[23] = 44 }
+        val pictures = mapOf(TripExport.Picture.CIRCLE to byteArrayOf(1, 2, 3), TripExport.Picture.LEGEND to header)
+        TripExport.kmz(drive(30), text, pictures, bytes)
+        val names = mutableListOf<String>()
+        java.util.zip.ZipInputStream(bytes.toByteArray().inputStream()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                names += entry.name
+                // The legend keeps its shape at its smaller size.
+                if (entry.name == "doc.kml") assertTrue(String(zip.readBytes()).contains("<size x=\"130\" y=\"195\""))
+            }
+        }
+        assertEquals(listOf("doc.kml", "files/circle.png", "files/legend.png"), names)
+    }
+
+    @Test
+    fun gpxCarriesHeightAccuracyAndSource() {
+        val points = drive(3).map { it.copy(altitudeM = 612.4, accuracyM = 3.5, speedFrom = SpeedInput.ANDROID_AUTO) }
+        val gpx = TripExport.gpx(points, text)
+        parse(gpx)
+        assertTrue(gpx.contains("<trkpt lat=\"24.000000\" lon=\"46.000000\"><ele>612.4</ele><time>"))
+        assertTrue(gpx.contains("<zakhm:accuracy>3.5</zakhm:accuracy><zakhm:speedFrom>android_auto</zakhm:speedFrom>"))
     }
 
     @Test

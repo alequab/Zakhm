@@ -421,7 +421,7 @@ class MainActivity : ComponentActivity() {
     private fun sendToMap(trip: SavedTrip, fresh: Boolean) {
         try {
             val open = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(exportTrip(trip, TripFormat.KML, fresh), TripFormat.KML.mime)
+                .setDataAndType(exportTrip(trip, TripFormat.KMZ, fresh), TripFormat.KMZ.mime)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             startActivity(open)
             preferences.edit().putStringSet(KEY_OPENED_TRIPS, openedTrips() + trip.file.name).apply()
@@ -436,7 +436,7 @@ class MainActivity : ComponentActivity() {
     /** Opens the app that takes drive files at its own start, where it lists the files it saved. */
     private fun openMapApp() {
         val probe = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(Uri.parse("content://$packageName.files/drive.kml"), TripFormat.KML.mime)
+            .setDataAndType(Uri.parse("content://$packageName.files/drive.kmz"), TripFormat.KMZ.mime)
         val app = packageManager.queryIntentActivities(probe, 0).firstOrNull()?.activityInfo?.packageName
         val launch = app?.let { packageManager.getLaunchIntentForPackage(it) }
         if (launch != null) startActivity(launch) else Toast.makeText(this, R.string.drive_no_map_app, Toast.LENGTH_LONG).show()
@@ -467,14 +467,18 @@ class MainActivity : ComponentActivity() {
     private fun exportTrip(trip: SavedTrip, format: TripFormat, fresh: Boolean = false): Uri {
         val points = TripStore.read(trip.file)
         val text = tripText(this, trip.summary, useMph)
-        val body = if (format == TripFormat.KML) TripExport.kml(points, text) else TripExport.gpx(points, text)
         val dir = File(cacheDir, "export")
         if (!dir.isDirectory && !dir.mkdirs()) throw IOException()
         // Only the newest is kept: each holds a whole drive's path.
         dir.listFiles()?.forEach { it.delete() }
         val opened = if (fresh) SimpleDateFormat("-HHmmss", Locale.US).format(Date()) else ""
         val file = File(dir, trip.file.nameWithoutExtension + opened + format.extension)
-        file.writeText(body)
+        when (format) {
+            TripFormat.KMZ -> file.outputStream().use { out ->
+                TripExport.kmz(points, text, TripPictures.all(TripExport.legend(points, text), text.rightToLeft), out)
+            }
+            TripFormat.GPX -> file.writeText(TripExport.gpx(points, text))
+        }
         return FileProvider.getUriForFile(this, "$packageName.files", file)
     }
 

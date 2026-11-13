@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.zakhm.core.SpeedInput
 import app.zakhm.core.TripSummary
 import app.zakhm.core.TripText
 import java.text.SimpleDateFormat
@@ -26,8 +27,8 @@ import java.util.Locale
 
 /** The map files a saved drive can be shared as. */
 enum class TripFormat(val extension: String, val mime: String) {
-    /** Carries its own colours and markers; Google Earth and Google My Maps open it. */
-    KML(".kml", "application/vnd.google-earth.kml+xml"),
+    /** KML packed with its pictures: its own colours, markers and legend. Google Earth and Google My Maps open it. */
+    KMZ(".kmz", "application/vnd.google-earth.kmz"),
 
     /** Plainer, but nearly every map program reads it. */
     GPX(".gpx", "application/gpx+xml"),
@@ -48,15 +49,18 @@ internal fun tripTitle(context: Context, summary: TripSummary): String {
     return SimpleDateFormat("EEE d MMM yyyy, HH:mm", locale).format(Date(summary.startMs))
 }
 
-private class TripFigures(val duration: String, val distance: String, val topSpeed: String, val strongestG: String)
+private class TripFigures(val duration: String, val distance: String, val topSpeed: String, val strongestG: String, val moving: String)
 
 private fun tripFigures(context: Context, summary: TripSummary, useMph: Boolean): TripFigures {
-    val minutes = summary.durationS / 60
-    val duration = if (minutes < 60) {
-        context.getString(R.string.drive_minutes, minutes)
-    } else {
-        context.getString(R.string.drive_hours, minutes / 60, minutes % 60)
+    fun span(seconds: Long): String {
+        val minutes = seconds / 60
+        return if (minutes < 60) {
+            context.getString(R.string.drive_minutes, minutes)
+        } else {
+            context.getString(R.string.drive_hours, minutes / 60, minutes % 60)
+        }
     }
+    val duration = span(summary.durationS)
     val distance = "%.1f %s".format(
         Locale.US,
         summary.distanceM / if (useMph) METERS_PER_MILE else METERS_PER_KM,
@@ -67,7 +71,7 @@ private fun tripFigures(context: Context, summary: TripSummary, useMph: Boolean)
         summary.topSpeedMps * if (useMph) MPH_PER_MPS else KMH_PER_MPS,
         context.getString(if (useMph) R.string.unit_mph else R.string.unit_kmh),
     )
-    return TripFigures(duration, distance, speed, "%.2f".format(Locale.US, summary.strongestG))
+    return TripFigures(duration, distance, speed, "%.2f".format(Locale.US, summary.strongestG), span(summary.movingS))
 }
 
 /** A drive in one line: how long, how far, how fast and how hard. */
@@ -79,14 +83,58 @@ internal fun tripDetails(context: Context, summary: TripSummary, useMph: Boolean
 /** The words written into a drive's map file. */
 internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean): TripText {
     val figures = tripFigures(context, summary, useMph)
+    val speedFactor = if (useMph) MPH_PER_MPS else KMH_PER_MPS
+    val speedUnit = context.getString(if (useMph) R.string.unit_mph else R.string.unit_kmh)
+    val metre = context.getString(R.string.unit_m)
+    // Average over the time spent moving, so a long wait at the lights doesn't drag it down.
+    val average = summary.movingS.takeIf { it > 0 }?.let { "%.0f %s".format(Locale.US, summary.distanceM / it * speedFactor, speedUnit) }
     return TripText(
-        facts = listOf(
+        facts = listOfNotNull(
             context.getString(R.string.trip_fact_date) to tripTitle(context, summary),
             context.getString(R.string.trip_fact_duration) to figures.duration,
+            context.getString(R.string.trip_fact_moving) to figures.moving,
             context.getString(R.string.trip_fact_distance) to figures.distance,
+            average?.let { context.getString(R.string.trip_fact_average) to it },
             context.getString(R.string.trip_top_speed) to figures.topSpeed,
             context.getString(R.string.trip_fact_strongest_g) to "${figures.strongestG} G",
+            context.getString(R.string.trip_fact_total_g) to "%.2f G".format(Locale.US, summary.strongestCombinedG),
+            summary.climbM?.let { context.getString(R.string.trip_fact_climb) to "%.0f %s".format(Locale.US, it, metre) },
+            summary.carSpeedShare?.let { context.getString(R.string.trip_fact_car_speed) to "%.0f%%".format(Locale.US, it * 100) },
         ),
+        totalGLabel = context.getString(R.string.trip_total_g),
+        stopsFolder = context.getString(R.string.trip_stops),
+        stopped = context.getString(R.string.trip_stopped),
+        durationLabel = context.getString(R.string.trip_fact_duration),
+        launchesFolder = context.getString(R.string.trip_launches),
+        // Round figures in the unit the driver reads.
+        launchTargetsMps = (if (useMph) listOf(30.0, 45.0, 60.0) else listOf(60.0, 80.0, 100.0)).map { it / speedFactor },
+        speedBefore = context.getString(R.string.trip_speed_before),
+        speedAfter = context.getString(R.string.trip_speed_after),
+        brakingDistance = context.getString(R.string.trip_braking_distance),
+        postsFolder = context.getString(R.string.trip_posts),
+        distanceLabel = context.getString(R.string.trip_fact_distance),
+        averageSpeed = context.getString(R.string.trip_average_so_far),
+        distanceUnit = context.getString(if (useMph) R.string.unit_mi else R.string.unit_km),
+        metresPerDistanceUnit = if (useMph) METERS_PER_MILE else METERS_PER_KM,
+        metreUnit = metre,
+        secondUnit = context.getString(R.string.unit_s),
+        gLayerName = context.getString(R.string.trip_g_layer),
+        gapsFolder = context.getString(R.string.trip_gaps),
+        gapName = context.getString(R.string.trip_gap),
+        arrowsFolder = context.getString(R.string.trip_arrows),
+        weakGpsName = context.getString(R.string.trip_weak_gps),
+        accuracyLabel = context.getString(R.string.trip_accuracy),
+        heightLabel = context.getString(R.string.trip_height),
+        speedFromLabel = context.getString(R.string.trip_speed_from),
+        speedSources = mapOf(
+            SpeedInput.PHONE to context.getString(R.string.trip_source_phone),
+            SpeedInput.OBD to context.getString(R.string.trip_source_obd),
+            SpeedInput.ANDROID_AUTO to context.getString(R.string.trip_source_auto),
+        ),
+        legendName = context.getString(R.string.trip_legend),
+        duration = { s ->
+            if (s < 60) context.getString(R.string.trip_seconds, s.toInt()) else context.getString(R.string.trip_minutes_seconds, (s / 60).toInt(), (s % 60).toInt())
+        },
         speedLabel = context.getString(R.string.trip_speed_folder),
         timeLabel = context.getString(R.string.trip_fact_time),
         gLabel = context.getString(R.string.trip_g_folder),
@@ -108,8 +156,8 @@ internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean): 
     braking = context.getString(R.string.trip_braking),
     leftTurn = context.getString(R.string.trip_left),
     rightTurn = context.getString(R.string.trip_right),
-    speedUnit = context.getString(if (useMph) R.string.unit_mph else R.string.unit_kmh),
-    speedFactor = if (useMph) MPH_PER_MPS else KMH_PER_MPS,
+    speedUnit = speedUnit,
+    speedFactor = speedFactor,
     )
 }
 
@@ -135,7 +183,7 @@ internal fun TripsSection(
             Text(tripDetails(context, trip.summary, useMph), color = Secondary, fontSize = DashType.Body)
             CompactButton(stringResource(R.string.drive_open), { onOpen(trip) }, Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton(stringResource(R.string.drive_share, stringResource(R.string.drive_kml)), { onShare(trip, TripFormat.KML) }, Modifier.weight(1f))
+                CompactButton(stringResource(R.string.drive_share, stringResource(R.string.drive_kmz)), { onShare(trip, TripFormat.KMZ) }, Modifier.weight(1f))
                 CompactButton(stringResource(R.string.drive_share, stringResource(R.string.drive_gpx)), { onShare(trip, TripFormat.GPX) }, Modifier.weight(1f))
                 CompactButton(stringResource(R.string.car_delete), { deleting = trip }, Modifier.weight(1f))
             }

@@ -67,7 +67,7 @@
 <td valign="top"><b>قراءات صادقة</b><br>تُعلَّم السرعة كتقدير عند فقدان GPS، ثم تُخفى بعد ثوانٍ قليلة.</td>
 </tr>
 <tr>
-<td valign="top"><b>تسجيل الرحلة والخريطة</b><br>تُحفظ كل رحلة تسجّلها بمسارها وسرعتها وقوة G، وتفتحها في تطبيقات الخرائط بصيغة KML أو GPX: المسار ملوّن حسب السرعة، مع علامات عند الفرملة والتسارع والانعطاف القوي. زر «فتح على الخريطة» يفتحها مباشرة في Google Earth، ويحمل الملف أيضًا شريط زمن وجولة تحليق مع الرحلة وجدارًا ثلاثي الأبعاد يرتفع بارتفاع السرعة.</td>
+<td valign="top"><b>تسجيل الرحلة والخريطة</b><br>تُحفظ كل رحلة تسجّلها بمسارها وسرعتها وقوة G وارتفاعها، وتفتحها في تطبيقات الخرائط بصيغة KMZ أو GPX: المسار ملوّن حسب السرعة مع دليل للألوان، وعلامات عند الفرملة والتسارع والانعطاف القوي، والتوقفات، وأزمنة الانطلاق من 0 إلى 100، ومسافة كل فرملة قوية، وعلامة عند كل كيلومتر، وأسهم الاتجاه، وأماكن انقطاع GPS أو ضعفه. زر «فتح على الخريطة» يفتحها مباشرة في Google Earth، ويحمل الملف أيضًا شريط زمن وجولة تحليق مع الرحلة وجدارًا ثلاثي الأبعاد يرتفع بارتفاع السرعة ومسارًا ملوّنًا حسب قوة G.</td>
 <td valign="top"><b>تحديث من داخل التطبيق</b><br>إشعار عند صدور إصدار جديد، وتنزيل موثَّق بضغطة، ويبقى التثبيت بموافقتك.</td>
 </tr>
 <tr>
@@ -111,9 +111,10 @@
 1. افتح الإعدادات ثم **الرحلات** واضغط **تسجيل الرحلة**، وأبقِ التطبيق مفتوحًا على الشاشة أثناء القيادة.
 2. اضغط **إيقاف التسجيل** عند الوصول، فتظهر الرحلة في **الرحلات المحفوظة**.
 3. اضغط **فتح على الخريطة** لتراها في Google Earth، ويجب أن يكون مثبّتًا على الهاتف. لا يفتح تطبيق خرائط Google هذه الملفات.
-4. لرؤية جدار السرعة، فعّل **جدار السرعة (ثلاثي الأبعاد)** من قائمة الرحلة في Google Earth ثم أمل العرض. وللتحليق مع الرحلة، شغّل **التحليق مع الرحلة**.
+4. اضغط أي علامة لترى بطاقتها، مثل زمن الانطلاق من 0 إلى 100 أو مسافة الفرملة أو مدة التوقف. وتجد كل طبقة في قائمة الرحلة في Google Earth: **الانطلاقات** و**التوقفات** و**علامات المسافة** و**الاتجاه** و**انقطاع إشارة GPS** و**GPS ضعيف**.
+5. لرؤية جدار السرعة، فعّل **جدار السرعة (ثلاثي الأبعاد)** من قائمة الرحلة ثم أمل العرض. ولتلوين المسار حسب قوة G، فعّل **المسار حسب قوة G**. وللتحليق مع الرحلة، شغّل **التحليق مع الرحلة**.
 
-يحفظ Google Earth كل رحلة يفتحها، فإذا فتحت الرحلة نفسها مرة ثانية يسألك زخم: فتح Google Earth لتجدها في قائمته، أو إرسال نسخة جديدة. ولإرسال الملف إلى حاسوب أو تطبيق خرائط آخر، استخدم **مشاركة KML** أو **مشاركة GPX**.
+يحفظ Google Earth كل رحلة يفتحها، فإذا فتحت الرحلة نفسها مرة ثانية يسألك زخم: فتح Google Earth لتجدها في قائمته، أو إرسال نسخة جديدة. ولإرسال الملف إلى حاسوب أو تطبيق خرائط آخر، استخدم **مشاركة KMZ** أو **مشاركة GPX**. يحمل ملف KMZ رموزه ودليل ألوانه في داخله، فتظهر دون إنترنت.
 
 ### كيف يعمل
 
@@ -132,7 +133,7 @@ flowchart LR
 
 - **لا تستخدم التطبيق أثناء القيادة.** جهّزه قبل الانطلاق، ودع أحد الركاب يتعامل مع الهاتف أثناء سير السيارة.
 - **ثبّت الهاتف في حامل متين.** فالحامل المهتز يضيف أخطاء لا يزيلها التطبيق بالكامل.
-- **موقعك لا يخرج من هاتفك.** يُستخدم لقراءة سرعة GPS فقط، ولا يُحفظ ولا يُرسل إلى أي جهة.
+- **موقعك لا يخرج من هاتفك.** يُستخدم لقراءة سرعة GPS، ولحفظ مسار الرحلة وارتفاعها عندما تسجّلها فقط، ولا يُرسل إلى أي جهة.
 - **بياناتك على هاتفك.** تبقى السيارات المحفوظة، بما فيها رقم الهيكل وعنوان محوّل البلوتوث، في مساحة التخزين الخاصة بالتطبيق. تحتوي الرحلات المحفوظة على مسار السيارة، فتبقى في مساحة التطبيق الخاصة ولا تغادر الهاتف إلا إذا شاركت إحداها. أما ملف البيانات الخام للحساسات فلا يحتوي على موقع أو رقم هيكل.
 - **الإنترنت للتحديثات فقط.** عند كل تشغيل وكل 12 ساعة في الخلفية، يسأل التطبيق خادم التحديث عن أحدث إصدار، ولا يُنزّل التحديث إلا إذا ضغطت تحديث. لا ترسل هذه الطلبات أي بيانات حساسات أو موقع، لكن يمكن للخادم رؤية عنوان IP الخاص بك كما في أي طلب عبر الإنترنت.
 
@@ -145,7 +146,8 @@ flowchart LR
 - قد يعرض GPS سرعة صغيرة والسيارة واقفة، فتظهر تلك السرعة لبضع ثوانٍ قبل أن يلاحظ التطبيق التوقف. ويستعمل التطبيق اهتزاز السيارة لتصحيح ذلك بعد أن يتعلّم الفرق بوضوح. وفي رحلة مدتها 16 دقيقة، لم يعدّ السيارة واقفة وهي تسير ولا مرة.
 - يحاول التطبيق أيضًا سماع سرعة العجلات التي تبثها بعض السيارات من تلقاء نفسها، ولا يستخدمها إلا بعد مطابقتها لسرعة السيارة. ولم تُسمع في السيارة التي جُرّب عليها.
 - لا يستطيع Android Auto التمييز بين سيارتين من الطراز والسنة نفسيهما. أما OBD-II فيستطيع ذلك إذا كانت السيارة تشارك رقم هيكلها.
-- فُتحت ملفات الرحلات في Google Earth على الويب وعلى هاتف أندرويد. يظهر المسار والعلامات وجدار السرعة على الويب، لكن بطاقات الدفعات القوية لا تُفتح أثناء الجولة هناك. ولم يُجرَّب جدار السرعة ولا الجولة على الهاتف بعد.
+- فُتحت ملفات الرحلات في Google Earth على هاتف أندرويد بالعربية والإنجليزية، فظهرت كل الطبقات ودليل الألوان والبطاقات. وعلى الويب ظهر المسار والعلامات وجدار السرعة في الإصدارات السابقة، لكن بطاقات الدفعات القوية لا تُفتح أثناء الجولة هناك. ولم يُجرَّب ملف KMZ على الويب بعد، ولا جدار السرعة والجولة على الهاتف.
+- الرحلات المحفوظة قبل الإصدار 1.6.2 تُفتح كما هي، لكن بلا ارتفاع ولا دقة GPS ولا مصدر للسرعة، لأنها لم تُسجَّل حينها.
 
 <details>
 <summary><b>السرعة من سيارتك</b></summary>
@@ -240,7 +242,7 @@ flowchart LR
 <td valign="top"><b>Honest readings</b><br>Speed is marked as an estimate when GPS is lost, then hidden after a few seconds.</td>
 </tr>
 <tr>
-<td valign="top"><b>Drive recording and map</b><br>Each drive you record is saved with its path, speed and G-force. Open it in map apps as KML or GPX: the path is coloured by speed, with markers at hard braking, acceleration and cornering. "Open on map" opens it straight in Google Earth, and the file also carries a timeline, a fly-along tour and a 3D wall that rises with the speed.</td>
+<td valign="top"><b>Drive recording and map</b><br>Each drive you record is saved with its path, speed, G-force and height. Open it in map apps as KMZ or GPX: the path is coloured by speed with a colour legend, with markers at hard braking, acceleration and cornering, stops, 0–100 km/h times, the distance of each hard braking, a post at every kilometre, direction arrows, and where GPS was lost or weak. "Open on map" opens it straight in Google Earth, and the file also carries a timeline, a fly-along tour, a 3D wall that rises with the speed, and a path coloured by G-force.</td>
 <td valign="top"><b>In-app updates</b><br>A notification when a new version is out, a verified one-tap download, and you approve the install.</td>
 </tr>
 <tr>
@@ -284,9 +286,10 @@ To change the colours, open settings, then **Car**, then **Theme**.
 1. Open settings, then **Drives**, and tap **Record drive**. Keep the app open on screen while you drive.
 2. Tap **Stop recording** when you arrive. The drive appears under **Saved drives**.
 3. Tap **Open on map** to see it in Google Earth, which must be installed on the phone. Google Maps can't open these files.
-4. To see the speed wall, turn on **Speed wall (3D)** in the drive's list in Google Earth, then tilt the view. To fly along the drive, play **Fly along the drive**.
+4. Tap any marker to see its card, such as a 0–100 time, a braking distance or how long a stop was. Each layer is in the drive's list in Google Earth: **Launches**, **Stops**, **Distance posts**, **Direction**, **GPS signal lost** and **Weak GPS**.
+5. To see the speed wall, turn on **Speed wall (3D)** in the drive's list, then tilt the view. To colour the path by G-force, turn on **Path by G-force**. To fly along the drive, play **Fly along the drive**.
 
-Google Earth keeps every drive it opens, so opening the same drive a second time asks whether to open Google Earth and find it in its list, or send a new copy. To send the file to a computer or another map app, use **Share KML** or **Share GPX**.
+Google Earth keeps every drive it opens, so opening the same drive a second time asks whether to open Google Earth and find it in its list, or send a new copy. To send the file to a computer or another map app, use **Share KMZ** or **Share GPX**. A KMZ carries its own icons and colour legend, so they show without internet.
 
 ### How it works
 
@@ -301,7 +304,7 @@ flowchart LR
 
 - **Don't use the app while driving.** Set it up before you leave, and let a passenger handle the phone while the car is moving.
 - **Use a firm mount.** A shaky mount adds errors the app can't fully remove.
-- **Your location stays on your phone.** It's used only to read GPS speed, and it's never saved or sent anywhere.
+- **Your location stays on your phone.** It's used to read GPS speed, and to save a drive's path and height only while you record one. It's never sent anywhere.
 - **Your data stays on your phone.** Saved cars, including any VIN or Bluetooth adapter address, stay in the app's private storage. Saved drives hold the car's path, so they stay in the app's private storage and leave the phone only when you share one. The raw sensor data file contains no position or VIN.
 - **Internet for updates only.** Each time it starts and every 12 hours in the background, the app asks an update server for the newest version, and only downloads it if you tap Update. These requests send no sensor or location data, though the server can see your IP address, as with any internet request.
 
@@ -314,7 +317,8 @@ flowchart LR
 - GPS can report a small speed while the car is standing still, and that speed may show for a few seconds before the app notices the stop. The app uses the car's vibration to correct this once it has clearly learned the difference. On a 16-minute drive, it never took the moving car for parked.
 - The app also listens for the wheel speeds some cars broadcast by themselves, and only uses them after they match the car's speed. They weren't heard on the car it was tried on.
 - Android Auto can't tell two cars of the same model and year apart. OBD-II can, if the car shares its VIN.
-- Drive files were opened in Google Earth on the web and on an Android phone. On the web the path, markers and speed wall show, but the hard-push cards don't open during the tour. The speed wall and tour haven't been tried on the phone yet.
+- Drive files were opened in Google Earth on an Android phone, in Arabic and English, and every layer, the colour legend and the cards showed. On the web, earlier versions showed the path, markers and speed wall, but the hard-push cards don't open during the tour there. The KMZ hasn't been tried on the web yet, nor the speed wall and tour on the phone.
+- Drives saved before version 1.6.2 open as before, but without height, GPS accuracy or speed source, since those weren't recorded then.
 
 <details>
 <summary><b>Speed from your car</b></summary>

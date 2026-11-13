@@ -335,7 +335,7 @@ class ScreenRenderTest {
         showDrives(listOf(trip("a", 12, 8_400.0), trip("b", 95, 121_300.0), trip("c", 4, 900.0), trip("d", 30, 22_000.0)))
         compose.onNodeWithText("Show all (4)").assertExists()
         compose.onAllNodes(hasText("Open on map")).assertCountEquals(3)
-        compose.onAllNodes(hasText("Share KML")).assertCountEquals(3)
+        compose.onAllNodes(hasText("Share KMZ")).assertCountEquals(3)
         save("drives")
         compose.onNodeWithText("Show all (4)").performClick()
         compose.onNodeWithText("Show all (4)").assertDoesNotExist()

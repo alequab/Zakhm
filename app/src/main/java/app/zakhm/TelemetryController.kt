@@ -11,6 +11,7 @@ import android.location.GnssStatus
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
@@ -568,7 +569,18 @@ class TelemetryController(private val context: Context) {
         val out = tripWriter ?: return
         // A position this vague would draw the path through buildings.
         if (location.hasAccuracy() && location.accuracy > MAX_TRIP_POSITION_ERROR_M) return
-        val point = tripRecorder.onPosition(location.time, location.latitude, location.longitude, engine.snapshot().speedMps)
+        // Height above sea level where Android gives it (Android 14 and later); otherwise GPS height, a few metres off but fine for climbs.
+        val altitude = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && location.hasMslAltitude() -> location.mslAltitudeMeters
+            location.hasAltitude() -> location.altitude
+            else -> null
+        }
+        val point = tripRecorder.onPosition(
+            location.time, location.latitude, location.longitude, engine.snapshot().speedMps,
+            altitudeM = altitude,
+            accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else null,
+            speedFrom = router.active(SystemClock.elapsedRealtimeNanos() / 1e9),
+        )
         try {
             out.write(TripFile.line(point))
             out.newLine()
