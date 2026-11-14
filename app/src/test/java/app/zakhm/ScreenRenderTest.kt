@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -80,7 +82,9 @@ class ScreenRenderTest {
         language = AppLanguage.ENGLISH,
     )
 
-    private val actions = ScreenActions(
+    private val actions = actionsWith()
+
+    private fun actionsWith(enableBluetooth: () -> Unit = {}) = ScreenActions(
         requestPermission = {},
         calibrate = {},
         resetPeaks = {},
@@ -104,6 +108,7 @@ class ScreenRenderTest {
         shareRecording = {},
         startUpdate = {},
         dismissUpdate = {},
+        enableBluetooth = enableBluetooth,
     )
 
     private fun show(state: TelemetryUiState, screenSettings: ScreenSettings = settings) {
@@ -231,6 +236,30 @@ class ScreenRenderTest {
     }
 
     @Test
+    fun bluetoothOffSaysSoAndOffersToTurnItOn() {
+        var asked = false
+        val off = state().copy(obdState = ObdState.BLUETOOTH_OFF, activeInput = SpeedInput.PHONE)
+        compose.setContent { TelemetryScreen(off, UpdateState.None, true, settings, actionsWith(enableBluetooth = { asked = true })) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Bluetooth is off", substring = true).assertExists()
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Speed source").performClick()
+        compose.waitForIdle()
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Turn on Bluetooth"))
+        compose.onNodeWithText("Turn on Bluetooth").performClick()
+        assertTrue(asked)
+        save("settings-bluetooth-off")
+    }
+
+    @Test
+    fun obdRetriesSlowDownWhileTheAdapterStaysAway() {
+        assertEquals(3_000L, obdRetryDelayMs(1))
+        assertEquals(3_000L, obdRetryDelayMs(OBD_QUICK_RETRIES))
+        assertEquals(15_000L, obdRetryDelayMs(OBD_QUICK_RETRIES + 1))
+    }
+
+    @Test
     fun settingsSheetWithThemeEditor() {
         show(state())
         compose.onNodeWithContentDescription("Settings").performClick()
@@ -266,8 +295,8 @@ class ScreenRenderTest {
     private fun showSettings(open: String?, arabic: Boolean = false) {
         compose.setContent {
             DashTheme(CarTheme.DEFAULT) {
-                Column(Modifier.fillMaxSize().background(Panel).verticalScroll(rememberScrollState()).padding(16.dp)) {
-                    SettingsContent(state(), settings.copy(language = if (arabic) AppLanguage.ARABIC else AppLanguage.ENGLISH), actions, open)
+                Box(Modifier.fillMaxSize().background(Background).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    SettingsScreen(state(), settings.copy(language = if (arabic) AppLanguage.ARABIC else AppLanguage.ENGLISH), actions, onClose = {}, startPage = open)
                 }
             }
         }
@@ -280,8 +309,8 @@ class ScreenRenderTest {
         listOf("How to use Zakhm", "Car", "Speed source", "Display", "G-force", "Drives", "Tools").forEach {
             compose.onNodeWithText(it).assertIsDisplayed()
         }
-        // Closed groups say what they're set to.
-        compose.onNodeWithText("OBD-II").assertExists()
+        // Each group says what it's set to, and the speed source how its connection is.
+        compose.onNodeWithText("OBD-II · car speed").assertExists()
         compose.onNodeWithText("km/h · Auto").assertExists()
         compose.onNodeWithText("0 saved").assertExists()
         save("settings-closed")
@@ -289,14 +318,36 @@ class ScreenRenderTest {
 
     @Test
     @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
-    fun settingsOpenOneGroupAtATime() {
+    fun eachGroupOpensItsOwnPageAndBackReturns() {
         showSettings(null)
         compose.onNodeWithText("Display").performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("Portrait").assertExists()
-        compose.onNodeWithText("G-force").performClick()
+        compose.onNodeWithText("G-force").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("Portrait").assertDoesNotExist()
+        compose.onNodeWithText("G-force").performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("Felt by driver").assertExists()
         save("settings-g-open")
+    }
+
+    @Test
+    @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
+    fun settingsListLandscapeUsesTwoColumns() {
+        showSettings(null)
+        listOf("Car", "Speed source", "Display", "G-force", "Drives", "Tools").forEach {
+            compose.onNodeWithText(it).assertIsDisplayed()
+        }
+        save("settings-landscape")
+    }
+
+    @Test
+    @Config(qualifiers = "ar-w432dp-h960dp-port-xxhdpi")
+    fun settingsListArabic() {
+        showSettings(null, arabic = true)
+        save("settings-closed-ar")
     }
 
     @Test
@@ -378,17 +429,17 @@ class ScreenRenderTest {
         compose.setContent {
             when (screen) {
                 0 -> TelemetryScreen(state(), UpdateState.None, true, shown, actions)
+                1 -> DashTheme(CarTheme.DEFAULT) {
+                    Box(Modifier.fillMaxSize().background(Background).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        SettingsScreen(state().copy(trips = drives), shown, actions, onClose = {})
+                    }
+                }
                 else -> DashTheme(CarTheme.DEFAULT) {
                     Column(
                         Modifier.fillMaxSize().background(Panel).verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (screen == 1) {
-                            // With the guide open, as a new user would first look at it.
-                            SettingsContent(state().copy(trips = drives), shown, actions, startOpen = "GUIDE")
-                        } else {
-                            TripsSection(drives, useMph = false, onShare = { _, _ -> }, onDelete = {})
-                        }
+                        TripsSection(drives, useMph = false, onShare = { _, _ -> }, onDelete = {})
                     }
                 }
             }

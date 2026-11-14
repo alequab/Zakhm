@@ -24,6 +24,7 @@
     <string name="status_obd_waiting">تم الاتصال بـ OBD-II، بانتظار السرعة</string>
     <string name="status_obd_no_answer">السيارة لا تستجيب عبر OBD-II</string>
     <string name="status_obd_failed">تعذّر الوصول إلى محوّل OBD-II</string>
+    <string name="status_obd_bluetooth_off">البلوتوث مغلق</string>
     <string name="status_obd_disconnected">فُصل OBD-II</string>
     <string name="obd_disconnect">قطع الاتصال</string>
     <string name="obd_connect">اتصال</string>
@@ -121,6 +122,8 @@
 
     <string name="obd_needs_permission">يلزم إذن البلوتوث للعثور على المحوّل والوصول إليه.</string>
     <string name="obd_allow_bluetooth">السماح بالبلوتوث</string>
+    <string name="obd_bluetooth_off">البلوتوث مغلق، فلا يمكن الوصول إلى المحوّل. يتصل زخم من تلقاء نفسه حين يعود البلوتوث.</string>
+    <string name="obd_turn_on_bluetooth">تشغيل البلوتوث</string>
     <string name="obd_hint">أقرن محوّل ELM327 بالبلوتوث الكلاسيكي من إعدادات أندرويد، أو ابحث عن محوّل Bluetooth LE، ثم اختره هنا.</string>
     <string name="obd_none_found">لم يُعثر على محوّلات.</string>
     <string name="obd_scan">البحث عن محوّلات Bluetooth LE</string>
@@ -151,8 +154,7 @@
     <string name="group_display">العرض</string>
     <string name="group_g">قوة G</string>
     <string name="group_drives">الرحلات</string>
-    <string name="group_open">مفتوح</string>
-    <string name="group_closed">مغلق</string>
+    <string name="back">رجوع</string>
     <string name="drives_count">المحفوظة: %1$d</string>
     <string name="drives_recording">جارٍ التسجيل…</string>
     <string name="tools_summary">معايرة، تصفير أعلى القيم</string>

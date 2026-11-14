@@ -10,7 +10,16 @@ import app.zakhm.core.WheelSpeedMessage
 import java.io.IOException
 import kotlin.math.abs
 
-enum class ObdState { IDLE, CONNECTING, CONNECTED, CAR_NOT_RESPONDING, FAILED, DISCONNECTED }
+enum class ObdState { IDLE, CONNECTING, CONNECTED, CAR_NOT_RESPONDING, FAILED, DISCONNECTED, BLUETOOTH_OFF }
+
+/** Retries come quickly at first, as after a short drop on the road, then slow down while the adapter stays out of reach. */
+internal fun obdRetryDelayMs(failures: Int): Long = if (failures <= OBD_QUICK_RETRIES) OBD_QUICK_RETRY_MS else OBD_SLOW_RETRY_MS
+
+internal const val OBD_QUICK_RETRIES = 10
+internal const val OBD_QUICK_RETRY_MS = 3_000L
+
+/** With the car off, the adapter stays out of reach; trying less often saves the battery. */
+internal const val OBD_SLOW_RETRY_MS = 15_000L
 
 /**
  * Keeps a Bluetooth link to an ELM327 adapter and reads the car's speed,
@@ -46,40 +55,72 @@ class ObdConnection(
     private fun run() {
         // Cheap adapters often accept only one way of connecting, so keep trying each.
         var attempt = 0
+        // Failures since the last good connection, which slow the retries down.
+        var failures = 0
+        // Once a way of connecting has worked, only that one is tried again: with Bluetooth
+        // just switched back on, Android may not know the adapter is Bluetooth LE.
+        var worked: LinkType? = null
         while (running) {
+            if (!adapter.isEnabled) {
+                // Nothing can connect, so wait quietly instead of failing every few seconds.
+                if (!waitForBluetooth()) return
+                attempt = 0
+                failures = 0
+                continue
+            }
             // After a failure, keep saying so during retries instead of flicking back to "connecting".
-            if (attempt == 0) onState(ObdState.CONNECTING)
+            if (failures == 0) onState(ObdState.CONNECTING)
             try {
                 val device = adapter.getRemoteDevice(address)
-                val types = linkTypesFor(device)
-                val client = ObdClient(open(device, types[attempt % types.size]))
+                val types = worked?.let { listOf(it) } ?: linkTypesFor(device)
+                val type = types[attempt % types.size]
+                val client = ObdClient(open(device, type))
                 if (!client.initialize()) throw IOException("Adapter rejected setup")
+                worked = type
+                failures = 0
                 client.readVin()?.let(onVin)
                 poll(client)
             } catch (_: IOException) {
                 attempt++
+                failures++
                 if (running) onState(ObdState.FAILED)
             } catch (_: SecurityException) {
+                failures++
                 if (running) onState(ObdState.FAILED)
             } catch (_: IllegalArgumentException) {
+                failures++
                 if (running) onState(ObdState.FAILED)
             } catch (_: InterruptedException) {
                 return
             } catch (_: RuntimeException) {
                 // Android's Bluetooth code can throw almost anything, and this thread must not take the app down.
                 attempt++
+                failures++
                 if (running) onState(ObdState.FAILED)
             } finally {
                 closeLink()
             }
-            if (running) {
-                try {
-                    Thread.sleep(RETRY_DELAY_MS)
-                } catch (_: InterruptedException) {
-                    return
-                }
-            }
+            if (running && !pause(obdRetryDelayMs(failures))) return
         }
+    }
+
+    /**
+     * Says Bluetooth is off and waits until it's back on, checking once a second; a check costs
+     * nothing and needs no permission. False when stopped meanwhile.
+     */
+    private fun waitForBluetooth(): Boolean {
+        onState(ObdState.BLUETOOTH_OFF)
+        while (running && !adapter.isEnabled) {
+            if (!pause(BLUETOOTH_CHECK_MS)) return false
+        }
+        return running
+    }
+
+    private fun pause(ms: Long): Boolean = try {
+        Thread.sleep(ms)
+        true
+    } catch (_: InterruptedException) {
+        false
     }
 
     @SuppressLint("MissingPermission")
@@ -241,6 +282,7 @@ class ObdConnection(
 
     private companion object {
         const val RETRY_DELAY_MS = 3000L
+        const val BLUETOOTH_CHECK_MS = 1_000L
 
         /** How long to keep asking between short tries of the stream while it's unconfirmed. */
         const val CHECK_EVERY_MS = 8_000L

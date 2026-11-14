@@ -30,6 +30,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 class TelemetryViewModel(application: Application) : AndroidViewModel(application) {
     val controller = TelemetryController(application)
@@ -125,6 +127,9 @@ class MainActivity : ComponentActivity() {
     private var hasPermission by mutableStateOf(false)
     private var useMph by mutableStateOf(false)
     private var rotation by mutableStateOf(RotationMode.AUTO)
+
+    /** True from the moment the phone is picked up until it has been left alone a while. */
+    private var heldInHand = false
     private var pairedDevices by mutableStateOf(emptyList<ObdDevice>())
     private var scannedDevices by mutableStateOf(emptyList<ObdDevice>())
     private var scanning by mutableStateOf(false)
@@ -180,6 +185,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by controller.state.collectAsStateWithLifecycle()
             val update by viewModel.update.collectAsStateWithLifecycle()
+            // Portrait while the phone is handled; the mount's way round again once it's left alone.
+            val inHand = state.snapshot.phoneInHand
+            LaunchedEffect(inHand) {
+                if (!inHand) delay(HAND_RELEASE_MS)
+                if (heldInHand != inHand) {
+                    heldInHand = inHand
+                    applyRotation()
+                }
+            }
             // The dashboard redraws many times a second, and none of this changes with it.
             val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage, gView, gRange) {
                 ScreenSettings(
@@ -210,6 +224,7 @@ class MainActivity : ComponentActivity() {
             selectInput = ::selectInput,
             selectObdDevice = { controller.selectObdDevice(it) },
             requestBluetooth = ::requestBluetooth,
+            enableBluetooth = ::enableBluetooth,
             scanForAdapters = ::scanForAdapters,
             toggleObdConnection = { controller.toggleObdConnection() },
             selectCar = { controller.selectCar(it) },
@@ -289,6 +304,19 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) bluetoothRequest.launch(BLUETOOTH_PERMISSIONS)
     }
 
+    /** Asks Android to switch Bluetooth on; the person confirms in Android's own dialog. */
+    @SuppressLint("MissingPermission")
+    private fun enableBluetooth() {
+        if (!hasBluetoothPermission()) return requestBluetooth()
+        try {
+            startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+        } catch (_: ActivityNotFoundException) {
+            startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+        } catch (_: SecurityException) {
+            requestBluetooth()
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun refreshObdDevices() {
         val allowed = hasBluetoothPermission()
@@ -366,12 +394,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyRotation() {
-        requestedOrientation = when (rotation) {
-            RotationMode.AUTO -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-            // The sensor variants still allow either way up, to suit how the phone is mounted.
-            RotationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            RotationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
+        // The sensor variants still allow either way up, to suit how the phone is mounted.
+        requestedOrientation = screenOrientation(rotation, heldInHand)
     }
 
     /** Null below Android 13, which has no per-app language; the app then follows the phone. */

@@ -24,6 +24,7 @@
     <string name="status_obd_waiting">OBD-II connected, waiting for speed</string>
     <string name="status_obd_no_answer">Car isn\'t answering OBD-II</string>
     <string name="status_obd_failed">Can\'t reach the OBD-II adapter</string>
+    <string name="status_obd_bluetooth_off">Bluetooth is off</string>
     <string name="status_obd_disconnected">OBD-II disconnected</string>
     <string name="obd_disconnect">Disconnect</string>
     <string name="obd_connect">Connect</string>
@@ -121,6 +122,8 @@
 
     <string name="obd_needs_permission">Bluetooth permission is needed to find and reach your adapter.</string>
     <string name="obd_allow_bluetooth">Allow Bluetooth</string>
+    <string name="obd_bluetooth_off">Bluetooth is off, so the adapter can\'t be reached. Zakhm connects by itself once it\'s back on.</string>
+    <string name="obd_turn_on_bluetooth">Turn on Bluetooth</string>
     <string name="obd_hint">Pair a classic Bluetooth ELM327 adapter in Android\'s settings, or scan for a Bluetooth LE one, then choose it here.</string>
     <string name="obd_none_found">No adapters found.</string>
     <string name="obd_scan">Scan for Bluetooth LE adapters</string>
@@ -151,8 +154,7 @@
     <string name="group_display">Display</string>
     <string name="group_g">G-force</string>
     <string name="group_drives">Drives</string>
-    <string name="group_open">Open</string>
-    <string name="group_closed">Closed</string>
+    <string name="back">Back</string>
     <string name="drives_count">%1$d saved</string>
     <string name="drives_recording">Recording…</string>
     <string name="tools_summary">Calibrate, reset peaks</string>
