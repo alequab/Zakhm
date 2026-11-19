@@ -74,12 +74,19 @@ private const val PREVIEW_FILL = 0.55f
 
 /** Picks and edits the active car's colours. [onChange] says whether the change is final and worth saving. */
 @Composable
-internal fun ThemeSettings(theme: CarTheme, onChange: (CarTheme, Boolean) -> Unit) {
+internal fun ThemeSettings(
+    theme: CarTheme,
+    /** False where the page already gives the title and hint. */
+    withHeading: Boolean = true,
+    onChange: (CarTheme, Boolean) -> Unit,
+) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var part by rememberSaveable { mutableStateOf(ThemePart.ACCENT) }
 
-    SectionTitle(R.string.section_theme)
-    Hint(stringResource(R.string.theme_hint))
+    if (withHeading) {
+        SectionTitle(R.string.section_theme)
+        Hint(stringResource(R.string.theme_hint))
+    }
     ThemePreview()
     ThemePreset.entries.chunked(PRESETS_PER_ROW).forEach { row ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

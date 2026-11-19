@@ -114,6 +114,7 @@ internal fun tripText(context: Context, summary: TripSummary, useMph: Boolean): 
         postsFolder = context.getString(R.string.trip_posts),
         distanceLabel = context.getString(R.string.trip_fact_distance),
         averageSpeed = context.getString(R.string.trip_average_so_far),
+        averageSpeedLabel = context.getString(R.string.trip_average_speed),
         distanceUnit = context.getString(if (useMph) R.string.unit_mi else R.string.unit_km),
         metresPerDistanceUnit = if (useMph) METERS_PER_MILE else METERS_PER_KM,
         metreUnit = metre,
@@ -168,13 +169,17 @@ internal fun TripsSection(
     onShare: (SavedTrip, TripFormat) -> Unit,
     onDelete: (SavedTrip) -> Unit,
     onOpen: (SavedTrip) -> Unit = {},
+    /** False where the page already gives the title and hint. */
+    withHeading: Boolean = true,
 ) {
     val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<SavedTrip?>(null) }
 
-    SectionTitle(R.string.section_drives)
-    Hint(stringResource(R.string.drives_hint))
+    if (withHeading) {
+        SectionTitle(R.string.section_drives)
+        Hint(stringResource(R.string.drives_hint))
+    }
     if (trips.isEmpty()) Hint(stringResource(R.string.drives_none))
 
     (if (showAll) trips else trips.take(TRIPS_SHOWN)).forEach { trip ->

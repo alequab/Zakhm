@@ -57,6 +57,8 @@
     <string name="peak_right">يمين</string>
 
     <string name="section_car">السيارة</string>
+    <string name="section_cars">سياراتك</string>
+    <string name="section_adapter">محوّل OBD-II</string>
     <string name="section_source">مصدر السرعة</string>
     <string name="section_units">الوحدات</string>
     <string name="section_screen">الشاشة</string>
@@ -165,7 +167,7 @@
     <string name="guide_step_focus">اضغط على عداد السرعة أو دائرة G ليملأ الشاشة. اضغط مرة أخرى لترى الاثنين.</string>
     <string name="guide_step_record">لحفظ رحلة، افتح قسم الرحلات واضغط تسجيل الرحلة، ثم أوقف التسجيل عند الوصول. ثم اضغط فتح على الخريطة في الرحلات المحفوظة لتراها في Google Earth.</string>
     <string name="guide_note">إذا أمسكت الهاتف أو حرّكته، تتوقف قراءة قوة G ثم تعود بنفسها.</string>
-    <string name="drives_hint">كل رحلة تسجّلها تُحفظ هنا بمسارها وسرعتها وقوة G. زر فتح على الخريطة يعرضها في Google Earth، ويجب أن يكون مثبّتًا: المسار ملوّن حسب السرعة، مع علامات عند الدفعات القوية، وجولة تحليق تعرض كل دفعة قوية، والتوقفات، وأزمنة 0–100، ومسافات الفرملة، وعلامات الكيلومترات، ودليل الألوان، مع جدار للسرعة ومسار حسب قوة G يمكن تفعيلهما. ومشاركة KMZ أو GPX ترسل الملف إلى حاسوب أو تطبيق خرائط آخر. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
+    <string name="drives_hint">زر فتح على الخريطة يعرض الرحلة في Google Earth، ويجب أن يكون مثبّتًا: اضغط الأسهم على المسار لترى السرعة وقوة G عند كل نقطة. ومشاركة KMZ أو GPX ترسل الملف إلى حاسوب أو تطبيق خرائط آخر. تبقى الرحلات على هذا الهاتف حتى تشارك إحداها.</string>
     <string name="drives_none">لا توجد رحلات بعد.</string>
     <string name="drives_show_all">عرض الكل (%1$d)</string>
     <string name="drive_open">فتح على الخريطة</string>
@@ -219,6 +221,7 @@
     <string name="trip_braking_distance">مسافة الفرملة</string>
     <string name="trip_posts">علامات المسافة</string>
     <string name="trip_average_so_far">متوسط السرعة حتى هنا</string>
+    <string name="trip_average_speed">متوسط السرعة</string>
     <string name="trip_g_layer">المسار حسب قوة G</string>
     <string name="trip_gaps">انقطاع إشارة GPS</string>
     <string name="trip_gap">انقطع GPS</string>
@@ -246,6 +249,10 @@
     <string name="g_view_driver">ما يشعر به السائق</string>
     <string name="g_view_hint">حركة السيارة: تتحرك النقطة في اتجاه تسارع السيارة وفرملتها وانعطافها. ما يشعر به السائق: تتحرك النقطة في الاتجاه الذي يدفعك إليه المقعد، فالفرملة ترفعها والانعطاف يسارًا ينقلها إلى اليمين.</string>
     <string name="section_g_range">تكبير دائرة G</string>
+    <string name="section_g_style">الشكل</string>
+    <string name="g_style_circle">دائرة</string>
+    <string name="g_style_ring">حلقة</string>
+    <string name="g_style_window">نافذة</string>
     <string name="g_range_choice">%1$s G</string>
     <string name="g_range_ring">الحلقة %1$s G</string>
     <string name="g_range_hint">قيمة الحلقة الخارجية. القيادة اليومية تبقى دون 0.5 G، فالحلقة الأصغر تجعل النقطة تتحرك أكثر.</string>

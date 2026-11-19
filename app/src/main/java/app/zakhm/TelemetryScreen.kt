@@ -69,6 +69,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -147,6 +148,7 @@ data class ScreenSettings(
     val gView: GView = GView.CAR,
     /** What the G circle's outer ring stands for, in G. Smaller zooms in. */
     val gRange: Double = DEFAULT_G_RANGE,
+    val gStyle: GStyle = GStyle.CIRCLE,
 )
 
 /** The zoom choices for the G circle; road cars rarely pass 1 G. */
@@ -180,6 +182,7 @@ class ScreenActions(
     val dismissUpdate: () -> Unit,
     val setGView: (GView) -> Unit = {},
     val setGRange: (Double) -> Unit = {},
+    val setGStyle: (GStyle) -> Unit = {},
     val shareTrip: (SavedTrip, TripFormat) -> Unit = { _, _ -> },
     val deleteTrip: (SavedTrip) -> Unit = {},
     val openTrip: (SavedTrip) -> Unit = {},
@@ -378,7 +381,7 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
         val landscape = maxWidth > maxHeight
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Full screen gives the header's room to the instrument, but keeps the status line.
-            if (focus == null) Header(state, settings.useMph) { showSettings = true } else FocusStatus(state, settings.useMph)
+            if (focus == null) Header(state, settings.useMph, actions.toggleRecording) { showSettings = true } else FocusStatus(state, settings.useMph)
             // A short fade through, so the change of view reads as one move. Android's
             // "remove animations" setting turns it into a cut.
             AnimatedContent(
@@ -395,18 +398,18 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                         BigSpeed(s, settings.useMph, Modifier.fillMaxSize().then(tapToFocus(Focus.SPEED)))
                     shown == Focus.G && landscape ->
                         Row(Modifier.fillMaxSize(), horizontalArrangement = gap) {
-                            GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)), large = true)
+                            GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)), large = true)
                             PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
                         }
                     shown == Focus.G ->
                         Column(Modifier.fillMaxSize(), verticalArrangement = gap) {
-                            GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)), large = true)
+                            GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)), large = true)
                             PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
                         }
                     landscape ->
                         Row(Modifier.fillMaxSize(), horizontalArrangement = gap) {
                             SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.SPEED)))
-                            GMeter(s, settings.gView, settings.gRange, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)))
+                            GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)))
                             PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
                         }
                     else ->
@@ -414,7 +417,7 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                             // The G circle is limited by its panel's height on a phone, while the speed dial
                             // leaves room under its arc, so the circle gets the larger share.
                             SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT).then(tapToFocus(Focus.SPEED)))
-                            GMeter(s, settings.gView, settings.gRange, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)))
+                            GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)))
                             PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
                         }
                 }
@@ -466,7 +469,7 @@ private fun UnknownCarDialog(identity: CarIdentity, state: TelemetryUiState, act
 }
 
 @Composable
-private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () -> Unit) {
+private fun Header(state: TelemetryUiState, useMph: Boolean, onToggleRecording: () -> Unit, onOpenSettings: () -> Unit) {
     val (statusText, statusColor) = speedStatus(state, useMph)
     val s = state.snapshot
     val settingsLabel = stringResource(R.string.settings)
@@ -482,7 +485,7 @@ private fun Header(state: TelemetryUiState, useMph: Boolean, onOpenSettings: () 
             )
             StatusLine(statusText, statusColor)
         }
-        RecordingBadge(state)
+        RecordButton(state, onToggleRecording)
         IconButton(onClick = onOpenSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
             SlidersIcon()
         }
@@ -517,6 +520,56 @@ private fun RecordingBadge(state: TelemetryUiState) {
         style = TabularDigits,
     )
 }
+
+/**
+ * Starts and stops recording a drive from the dashboard: a red dot to start, and while
+ * recording a stop square with the time, so it's clear at a glance that it's running.
+ */
+@Composable
+private fun RecordButton(state: TelemetryUiState, onToggle: () -> Unit) {
+    val label = stringResource(if (state.recording) R.string.tool_stop_recording else R.string.tool_record)
+    val red = Alert
+    val ring = Secondary
+    Row(
+        Modifier
+            .clip(CircleShape)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onToggle)
+            .semantics { contentDescription = label }
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+    ) {
+        Canvas(Modifier.size(22.dp)) {
+            val edge = 2.dp.toPx()
+            val radius = size.minDimension / 2 - edge / 2
+            drawCircle(if (state.recording) red else ring, radius, style = Stroke(edge))
+            if (state.recording) {
+                val side = size.width * RECORD_STOP_SHARE
+                drawRoundRect(
+                    red,
+                    topLeft = Offset((size.width - side) / 2, (size.height - side) / 2),
+                    size = Size(side, side),
+                    cornerRadius = CornerRadius(2.dp.toPx()),
+                )
+            } else {
+                drawCircle(red, size.minDimension * RECORD_DOT_SHARE)
+            }
+        }
+        if (state.recording) {
+            Text(
+                "%d:%02d".format(Locale.US, state.recordingSeconds / 60, state.recordingSeconds % 60),
+                color = Alert,
+                fontSize = DashType.Body,
+                style = TabularDigits,
+            )
+        }
+    }
+}
+
+private const val RECORD_STOP_SHARE = 0.4f
+private const val RECORD_DOT_SHARE = 0.27f
 
 /** The status alone, for full screen: an estimated or lost speed must never go unexplained. */
 @Composable
@@ -752,8 +805,26 @@ private fun BigSpeed(s: TelemetrySnapshot, useMph: Boolean, modifier: Modifier) 
     }
 }
 
+/** The G-force instrument in the chosen style. */
 @Composable
-private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, modifier: Modifier, large: Boolean = false) {
+private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, style: GStyle, modifier: Modifier, large: Boolean = false) {
+    // Until forward is known there's no G-force to show, only why.
+    val waiting = if (s.longitudinalG != null) {
+        null
+    } else if (s.phoneInHand) {
+        stringResource(R.string.phone_in_hand)
+    } else {
+        calibrationHint(s) ?: stringResource(R.string.calibrating)
+    }
+    when (style) {
+        GStyle.CIRCLE -> GCircle(s, view, range, modifier, large)
+        GStyle.RING -> GRing(s, range, waiting, modifier, large)
+        GStyle.WINDOW -> GWindow(s, range, waiting, modifier, large)
+    }
+}
+
+@Composable
+private fun GCircle(s: TelemetrySnapshot, view: GView, range: Double, modifier: Modifier, large: Boolean = false) {
     val long = s.longitudinalG
     val lat = s.lateralG
     val trail = remember(view, range) { mutableStateListOf<Offset>() }
@@ -988,7 +1059,7 @@ internal fun SettingsScreen(
                     if (shown == null) {
                         SettingsList(state, settings, wide) { page = it.name }
                     } else {
-                        Column(Modifier.widthIn(max = SETTINGS_PAGE_MAX_WIDTH), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.widthIn(max = SETTINGS_PAGE_MAX_WIDTH), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             SettingsPage(shown, state, settings, actions)
                         }
                     }
@@ -1128,7 +1199,7 @@ private fun groupSummary(group: SettingsGroup, state: TelemetryUiState, settings
         "$unit · ${stringResource(settings.rotation.label)}" to null
     }
     SettingsGroup.G_FORCE ->
-        "${stringResource(settings.gView.label)} · ${stringResource(R.string.g_range_choice, formatRange(settings.gRange))}" to null
+        "${stringResource(settings.gStyle.label)} · ${stringResource(settings.gView.label)} · ${stringResource(R.string.g_range_choice, formatRange(settings.gRange))}" to null
     SettingsGroup.DRIVES ->
         if (state.recording) stringResource(R.string.drives_recording) to Alert else stringResource(R.string.drives_count, state.trips.size) to null
     SettingsGroup.TOOLS -> stringResource(R.string.tools_summary) to null
@@ -1157,17 +1228,47 @@ private fun sourceSummary(state: TelemetryUiState): Pair<String, Color?> = when 
     }
 }
 
+/**
+ * One part of a settings page: a small title, a panel holding its controls, and a short
+ * hint under the panel. Every page is made of these, so they all read the same way.
+ */
+@Composable
+private fun SettingsSection(
+    @StringRes title: Int? = null,
+    hint: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        title?.let {
+            Text(
+                stringResource(it).uppercase(Locale.US),
+                color = Secondary,
+                fontSize = DashType.Label,
+                letterSpacing = labelSpacing(1.5.sp),
+                modifier = Modifier.padding(horizontal = 4.dp).semantics { heading() },
+            )
+        }
+        Column(
+            Modifier.fillMaxWidth().clip(PanelShape).panel().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+        hint?.let { Text(it, color = Secondary, fontSize = DashType.Body, modifier = Modifier.padding(horizontal = 4.dp)) }
+    }
+}
+
 /** A group's own page. */
 @Composable
 private fun ColumnScope.SettingsPage(group: SettingsGroup, state: TelemetryUiState, settings: ScreenSettings, actions: ScreenActions) {
     when (group) {
-        SettingsGroup.GUIDE -> {
+        SettingsGroup.GUIDE -> SettingsSection(hint = stringResource(R.string.guide_note)) {
             GUIDE_STEPS.forEachIndexed { index, step -> GuideStep(index + 1, stringResource(step)) }
-            Hint(stringResource(R.string.guide_note))
         }
         SettingsGroup.CAR -> {
-            CarSettings(state, actions)
-            ThemeSettings(state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT, actions.setTheme)
+            SettingsSection(R.string.section_cars, carHint(state)) { CarSettings(state, actions) }
+            SettingsSection(R.string.section_theme, stringResource(R.string.theme_hint)) {
+                ThemeSettings(state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT, withHeading = false, onChange = actions.setTheme)
+            }
         }
         SettingsGroup.SOURCE -> {
             val sources = listOf(
@@ -1175,60 +1276,87 @@ private fun ColumnScope.SettingsPage(group: SettingsGroup, state: TelemetryUiSta
                 SpeedInput.OBD to stringResource(R.string.source_obd),
                 SpeedInput.ANDROID_AUTO to stringResource(R.string.source_auto),
             )
-            ChoiceRow(sources, state.selectedInput, actions.selectInput)
-            when (state.selectedInput) {
-                SpeedInput.PHONE -> Hint(stringResource(R.string.source_hint_phone))
-                SpeedInput.OBD -> ObdSettings(state, settings, actions)
-                SpeedInput.ANDROID_AUTO -> Hint(stringResource(R.string.source_hint_auto))
+            val sourceHint = when (state.selectedInput) {
+                SpeedInput.PHONE -> stringResource(R.string.source_hint_phone)
+                SpeedInput.OBD -> null
+                SpeedInput.ANDROID_AUTO -> stringResource(R.string.source_hint_auto)
             }
-            Hint(stringResource(R.string.source_hint_general))
+            SettingsSection(hint = listOfNotNull(sourceHint, stringResource(R.string.source_hint_general)).joinToString(" ")) {
+                ChoiceRow(sources, state.selectedInput, actions.selectInput)
+            }
+            if (state.selectedInput == SpeedInput.OBD) {
+                SettingsSection(R.string.section_adapter, stringResource(R.string.obd_hint)) { ObdSettings(state, settings, actions) }
+            }
         }
         SettingsGroup.DISPLAY -> {
-            SectionTitle(R.string.section_units)
-            ChoiceRow(
-                listOf(false to stringResource(R.string.unit_kmh), true to stringResource(R.string.unit_mph)),
-                settings.useMph,
-                actions.setUseMph,
-            )
-            SectionTitle(R.string.section_screen)
-            ChoiceRow(RotationMode.entries.map { it to stringResource(it.label) }, settings.rotation, actions.setRotation)
+            SettingsSection(R.string.section_units) {
+                ChoiceRow(
+                    listOf(false to stringResource(R.string.unit_kmh), true to stringResource(R.string.unit_mph)),
+                    settings.useMph,
+                    actions.setUseMph,
+                )
+            }
+            SettingsSection(R.string.section_screen) {
+                ChoiceRow(RotationMode.entries.map { it to stringResource(it.label) }, settings.rotation, actions.setRotation)
+            }
             settings.language?.let { language ->
-                SectionTitle(R.string.section_language)
-                ChoiceRow(AppLanguage.entries.map { it to stringResource(it.label) }, language, actions.setLanguage)
+                SettingsSection(R.string.section_language) {
+                    ChoiceRow(AppLanguage.entries.map { it to stringResource(it.label) }, language, actions.setLanguage)
+                }
             }
         }
         SettingsGroup.G_FORCE -> {
-            SectionTitle(R.string.section_g_view)
-            ChoiceRow(GView.entries.map { it to stringResource(it.label) }, settings.gView, actions.setGView)
-            Hint(stringResource(R.string.g_view_hint))
-            SectionTitle(R.string.section_g_range)
-            ChoiceRow(G_RANGES.map { it to stringResource(R.string.g_range_choice, formatRange(it)) }, settings.gRange, actions.setGRange)
-            Hint(stringResource(R.string.g_range_hint))
+            SettingsSection(R.string.section_g_style) {
+                ChoiceRow(GStyle.entries.map { it to stringResource(it.label) }, settings.gStyle, actions.setGStyle)
+            }
+            SettingsSection(R.string.section_g_view, stringResource(R.string.g_view_hint)) {
+                ChoiceRow(GView.entries.map { it to stringResource(it.label) }, settings.gView, actions.setGView)
+            }
+            SettingsSection(R.string.section_g_range, stringResource(R.string.g_range_hint)) {
+                ChoiceRow(G_RANGES.map { it to stringResource(R.string.g_range_choice, formatRange(it)) }, settings.gRange, actions.setGRange)
+            }
             Hint(stringResource(R.string.focus_hint))
         }
         SettingsGroup.DRIVES -> {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton(
-                    stringResource(if (state.recording) R.string.tool_stop_recording else R.string.tool_record),
-                    actions.toggleRecording,
-                    Modifier.weight(1f),
-                )
-                val file = state.lastRecording
-                if (file != null && !state.recording) {
-                    CompactButton(stringResource(R.string.tool_share_recording), { actions.shareRecording(file) }, Modifier.weight(1f))
+            SettingsSection(hint = state.recordingError) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactButton(
+                        stringResource(if (state.recording) R.string.tool_stop_recording else R.string.tool_record),
+                        actions.toggleRecording,
+                        Modifier.weight(1f),
+                    )
+                    val file = state.lastRecording
+                    if (file != null && !state.recording) {
+                        CompactButton(stringResource(R.string.tool_share_recording), { actions.shareRecording(file) }, Modifier.weight(1f))
+                    }
                 }
             }
-            state.recordingError?.let { Text(it, color = Alert, fontSize = DashType.Label) }
-            TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip, actions.openTrip)
+            SettingsSection(R.string.section_drives, stringResource(R.string.drives_hint)) {
+                TripsSection(state.trips, settings.useMph, actions.shareTrip, actions.deleteTrip, actions.openTrip, withHeading = false)
+            }
         }
-        SettingsGroup.TOOLS -> {
+        SettingsGroup.TOOLS -> SettingsSection(hint = stringResource(R.string.tools_hint)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CompactButton(stringResource(R.string.tool_calibrate), actions.calibrate, Modifier.weight(1f))
                 CompactButton(stringResource(R.string.tool_reset_peaks), actions.resetPeaks, Modifier.weight(1f))
             }
-            Hint(stringResource(R.string.tools_hint))
         }
     }
+}
+
+/** What the car list needs saying: cars keep their own settings, and how this one is recognised. */
+@Composable
+private fun carHint(state: TelemetryUiState): String {
+    val active = state.cars.firstOrNull { it.id == state.activeCarId }
+    val how = stringResource(
+        when {
+            active == null -> R.string.car_hint_unknown
+            CarIdentity.vinOf(active.identityKey) != null -> R.string.car_hint_vin
+            active.identityKey != null -> R.string.car_hint_model
+            else -> R.string.car_hint_unknown
+        },
+    )
+    return "${stringResource(R.string.car_hint_saved)} $how"
 }
 
 @Composable
@@ -1257,16 +1385,6 @@ private fun CarSettings(state: TelemetryUiState, actions: ScreenActions) {
             CompactButton(stringResource(R.string.car_delete), { dialog = CarDialog.DELETE }, Modifier.weight(1f))
         }
     }
-    Hint(stringResource(R.string.car_hint_saved))
-    Hint(
-        stringResource(
-            when {
-                CarIdentity.vinOf(active.identityKey) != null -> R.string.car_hint_vin
-                active.identityKey != null -> R.string.car_hint_model
-                else -> R.string.car_hint_unknown
-            },
-        ),
-    )
     CarIdentity.vinOf(active.identityKey)?.let { Hint(stringResource(R.string.car_vin, it)) }
 
     when (dialog) {
@@ -1328,7 +1446,6 @@ private fun ObdSettings(state: TelemetryUiState, settings: ScreenSettings, actio
         Hint(stringResource(R.string.obd_bluetooth_off))
         CompactButton(stringResource(R.string.obd_turn_on_bluetooth), actions.enableBluetooth, Modifier.fillMaxWidth())
     }
-    Hint(stringResource(R.string.obd_hint))
     CompactButton(
         stringResource(if (settings.scanningForAdapters) R.string.obd_scanning else R.string.obd_scan),
         actions.scanForAdapters,

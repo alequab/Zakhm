@@ -189,8 +189,9 @@ class TripTest {
         assertEquals("0.0", firstStep.getElementsByTagName("heading").item(0).textContent)
         assertEquals("smooth", doc.getElementsByTagNameNS(gx, "flyToMode").item(1).textContent)
         assertEquals("bounce", doc.getElementsByTagNameNS(gx, "flyToMode").item(flights - 1).textContent)
-        // Hard pushes and the 5 km posts carry a time, so they appear as the car reaches them.
-        assertEquals(6, doc.getElementsByTagName("TimeStamp").length)
+        // Hard pushes, the 5 km posts and the arrows carry a time, so they appear as the car reaches them.
+        val arrows = folder(doc, "Direction")!!.getElementsByTagName("Placemark").length
+        assertEquals(6 + arrows, doc.getElementsByTagName("TimeStamp").length)
         assertEquals("Distance: 6.0 km", doc.getElementsByTagName("description").item(0).textContent)
         assertTrue(doc.getElementsByTagName("description").item(1).textContent.startsWith("<table"))
         assertEquals(4, doc.getElementsByTagName("StyleMap").length)
@@ -423,6 +424,27 @@ class TripTest {
         assertFalse(TripExport.kml(points, text).contains("ScreenOverlay"))
         // Every icon is packed in the file, not fetched from the internet.
         assertFalse(kml.contains("http://maps.google.com"))
+    }
+
+    @Test
+    fun thePathCanBeReadByTappingArrowsAndStretches() {
+        // 20 m/s north for 300 s: 6 km, so arrows at least 150 m apart.
+        val points = drive(301, g = { if (it == 100) 0.3 to 0.4 else 0.0 to 0.0 }).map { it.copy(altitudeM = 600.0, speedFrom = SpeedInput.OBD) }
+        val doc = parse(TripExport.kml(points, text))
+        val arrows = folder(doc, "Direction")!!.getElementsByTagName("Placemark")
+        assertTrue("arrows: ${arrows.length}", arrows.length in 30..45)
+        val first = arrows.item(0) as org.w3c.dom.Element
+        // Each arrow has a card: what the car was doing there.
+        assertEquals("72 km/h · 22:13:23", first.getElementsByTagName("name").item(0).textContent)
+        val card = first.getElementsByTagName("description").item(0).textContent
+        listOf("Speed", "72 km/h", "Time", "Distance", "Height", "600 m", "Speed from", "OBD").forEach { assertTrue(it, card.contains(it)) }
+        // A stretch's card says how it was driven, not only when.
+        val kml = TripExport.kml(points, text)
+        listOf("<b>Average speed</b></td><td>72 km/h", "<b>Top speed</b></td><td>72 km/h", "<b>Distance</b></td><td>6.0 km", "<b>Total G</b></td><td>0.50 G").forEach {
+            assertTrue(it, kml.contains(it))
+        }
+        // A path wide enough to tap.
+        assertTrue(kml.contains("<width>8</width>"))
     }
 
     @Test

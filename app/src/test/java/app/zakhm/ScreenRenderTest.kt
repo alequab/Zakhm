@@ -84,7 +84,7 @@ class ScreenRenderTest {
 
     private val actions = actionsWith()
 
-    private fun actionsWith(enableBluetooth: () -> Unit = {}) = ScreenActions(
+    private fun actionsWith(enableBluetooth: () -> Unit = {}, toggleRecording: () -> Unit = {}) = ScreenActions(
         requestPermission = {},
         calibrate = {},
         resetPeaks = {},
@@ -104,7 +104,7 @@ class ScreenRenderTest {
         saveUnknownCarToCurrent = {},
         saveUnknownCarAsNew = {},
         skipUnknownCar = {},
-        toggleRecording = {},
+        toggleRecording = toggleRecording,
         shareRecording = {},
         startUpdate = {},
         dismissUpdate = {},
@@ -252,6 +252,57 @@ class ScreenRenderTest {
         save("settings-bluetooth-off")
     }
 
+    /** Each G-force style on the dashboard and full screen, saved to look at. */
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun gForceStyles() {
+        var style by mutableStateOf(GStyle.RING)
+        var focus by mutableStateOf<Focus?>(null)
+        compose.setContent {
+            androidx.compose.runtime.key(focus) {
+                TelemetryScreen(state(), UpdateState.None, true, settings.copy(gStyle = style), actions, startFocus = focus)
+            }
+        }
+        listOf(GStyle.RING, GStyle.WINDOW).forEach {
+            style = it
+            focus = null
+            compose.onNodeWithText("0.38", substring = true).assertExists()
+            save("g-style-${it.name.lowercase()}")
+            focus = Focus.G
+            save("g-style-${it.name.lowercase()}-full")
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
+    fun gForceStylesLandscape() {
+        var style by mutableStateOf(GStyle.RING)
+        compose.setContent { TelemetryScreen(state(), UpdateState.None, true, settings.copy(gStyle = style), actions) }
+        save("g-style-ring-land")
+        style = GStyle.WINDOW
+        save("g-style-window-land")
+    }
+
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun theDashboardStartsAndStopsRecording() {
+        var toggled = 0
+        var recording by mutableStateOf(false)
+        compose.setContent {
+            val shown = if (recording) state().copy(recording = true, recordingSeconds = 65) else state()
+            TelemetryScreen(shown, UpdateState.None, true, settings, actionsWith(toggleRecording = { toggled++ }))
+        }
+        compose.onNodeWithContentDescription("Record drive").performClick()
+        assertEquals(1, toggled)
+        recording = true
+        compose.waitForIdle()
+        // While recording it says so with the time, and offers to stop.
+        compose.onNodeWithText("1:05").assertExists()
+        compose.onNodeWithContentDescription("Stop recording").performClick()
+        assertEquals(2, toggled)
+        save("dashboard-recording")
+    }
+
     @Test
     fun obdRetriesSlowDownWhileTheAdapterStaysAway() {
         assertEquals(3_000L, obdRetryDelayMs(1))
@@ -331,6 +382,25 @@ class ScreenRenderTest {
         compose.waitForIdle()
         compose.onNodeWithText("Felt by driver").assertExists()
         save("settings-g-open")
+    }
+
+    /** Every group's own page, saved to look at. */
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun everySettingsPage() {
+        var page by mutableStateOf("CAR")
+        compose.setContent {
+            DashTheme(CarTheme.DEFAULT) {
+                Box(Modifier.fillMaxSize().background(Background).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    // A fresh screen for each page, opened straight on it.
+                    androidx.compose.runtime.key(page) { SettingsScreen(state(), settings, actions, onClose = {}, startPage = page) }
+                }
+            }
+        }
+        listOf("CAR", "SOURCE", "DISPLAY", "G_FORCE", "DRIVES", "GUIDE", "TOOLS").forEach {
+            page = it
+            save("settings-page-${it.lowercase()}")
+        }
     }
 
     @Test

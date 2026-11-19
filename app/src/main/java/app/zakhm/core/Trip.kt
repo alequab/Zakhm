@@ -206,6 +206,9 @@ object Trips {
         }
     }
 
+    /** Distance from one point to the next along the drive, measured the way the summary measures it. */
+    fun distanceBetween(a: TripPoint, b: TripPoint): Double = step(a, b)
+
     fun metersBetween(a: TripPoint, b: TripPoint): Double {
         val lat1 = Math.toRadians(a.latitude)
         val lat2 = Math.toRadians(b.latitude)

@@ -57,6 +57,8 @@
     <string name="peak_right">RIGHT</string>
 
     <string name="section_car">Car</string>
+    <string name="section_cars">Your cars</string>
+    <string name="section_adapter">OBD-II adapter</string>
     <string name="section_source">Speed source</string>
     <string name="section_units">Units</string>
     <string name="section_screen">Screen</string>
@@ -165,7 +167,7 @@
     <string name="guide_step_focus">Tap the speed gauge or the G circle to fill the screen with it. Tap again to see both.</string>
     <string name="guide_step_record">To keep a drive, open Drives and tap Record drive, then stop when you arrive. Then tap Open on map under Saved drives to see it in Google Earth.</string>
     <string name="guide_note">If you pick up or move the phone, G-force pauses and comes back by itself.</string>
-    <string name="drives_hint">Each drive you record is saved here with its path, speed and G-force. Open on map shows it in Google Earth, which must be installed: the path coloured by speed, the hard pushes marked, a fly-along tour that shows each hard push, stops, 0–100 times, braking distances, kilometre posts and a colour legend, with a speed wall and a G-force path to switch on. Share KMZ or GPX sends the file to a computer or another map app. Drives stay on this phone until you share one.</string>
+    <string name="drives_hint">Open on map shows a drive in Google Earth, which must be installed: tap the arrows along the path for the speed and G-force at each spot. Share KMZ or GPX sends it to a computer or another map app. Drives stay on this phone until you share one.</string>
     <string name="drives_none">No drives yet.</string>
     <string name="drives_show_all">Show all (%1$d)</string>
     <string name="drive_kmz" translatable="false">KMZ</string>
@@ -221,6 +223,7 @@
     <string name="trip_braking_distance">Braking distance</string>
     <string name="trip_posts">Distance posts</string>
     <string name="trip_average_so_far">Average speed so far</string>
+    <string name="trip_average_speed">Average speed</string>
     <string name="trip_g_layer">Path by G-force</string>
     <string name="trip_gaps">GPS signal lost</string>
     <string name="trip_gap">GPS lost</string>
@@ -248,6 +251,10 @@
     <string name="g_view_driver">Felt by driver</string>
     <string name="g_view_hint">Car\'s movement: the dot goes the way the car speeds up, brakes and turns. Felt by driver: the dot goes the way you\'re pushed in your seat, so braking moves it up and a left turn moves it right.</string>
     <string name="section_g_range">G circle zoom</string>
+    <string name="section_g_style">Style</string>
+    <string name="g_style_circle">Circle</string>
+    <string name="g_style_ring">Ring</string>
+    <string name="g_style_window">Window</string>
     <string name="g_range_choice">%1$s G</string>
     <string name="g_range_ring">Ring %1$s G</string>
     <string name="g_range_hint">What the outer ring stands for. Everyday driving stays under 0.5 G, so a smaller ring makes the dot move more.</string>

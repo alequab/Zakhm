@@ -54,6 +54,7 @@ data class TripText(
     val postsFolder: String = "Distance posts",
     val distanceLabel: String = "Distance",
     val averageSpeed: String = "Average speed so far",
+    val averageSpeedLabel: String = "Average speed",
     val distanceUnit: String = "km",
     /** Metres in one [distanceUnit]. */
     val metresPerDistanceUnit: Double = 1000.0,
@@ -91,6 +92,9 @@ data class TripText(
     fun seconds(value: Double) = "%.1f %s".format(Locale.US, value, secondUnit)
 
     fun metres(value: Double) = "%.0f %s".format(Locale.US, value, metreUnit)
+
+    /** A distance in the driver's unit, such as "12.4 km". */
+    fun distance(metres: Double) = "%.1f %s".format(Locale.US, metres / metresPerDistanceUnit, distanceUnit)
 
     /** "0–100 km/h" for a launch target. */
     fun launchTarget(mps: Double) = "0–%.0f %s".format(Locale.US, mps * speedFactor, speedUnit)
@@ -169,8 +173,14 @@ object TripExport {
     private const val WALL_METRES_PER_MPS = 5.0
 
     /** Direction arrows: at least this far apart, and no more than [MAX_ARROWS] on a long drive. */
-    private const val ARROW_MIN_SPACING_M = 250.0
-    private const val MAX_ARROWS = 40
+    private const val ARROW_MIN_SPACING_M = 150.0
+    private const val MAX_ARROWS = 120
+
+    /** Big enough to hit with a finger: each arrow opens the reading where it stands. */
+    private const val ARROW_SCALE = 1.0
+
+    /** The path's width in pixels: wide enough to tap, narrow enough to see the road under it. */
+    private const val PATH_WIDTH = 8
 
     /** Start and end of right-to-left text (embedding), for lines Earth would lay out left to right. */
     private val RTL_START = Char(0x202B).toString()
@@ -346,12 +356,27 @@ object TripExport {
 
         val arrows = arrows(points)
         if (arrows.isNotEmpty()) {
+            // The path is a thin line, hard to hit with a finger on a phone. The arrows along it are
+            // easy targets, so each opens the reading there.
+            val travelled = distancesFromStart(points)
             folder(out, text, text.arrowsFolder) {
                 arrows.forEach { (p, heading) ->
+                    val name = listOfNotNull(p.speedMps?.let(text::speed), text.clock(p.timeMs)).joinToString(" · ")
+                    val fields = listOfNotNull(
+                        p.speedMps?.let { text.speedLabel to text.speed(it) },
+                        text.timeLabel to text.clock(p.timeMs),
+                        Trips.combinedG(p)?.let { text.totalGLabel to "%.2f G".format(Locale.US, it) },
+                        travelled[p]?.let { text.distanceLabel to text.distance(it) },
+                        p.altitudeM?.let { text.heightLabel to text.metres(it) },
+                        p.speedFrom?.let { from -> text.speedSources[from]?.let { text.speedFromLabel to it } },
+                    )
                     // A style of its own, since each arrow has its own turn.
-                    out.append("<Placemark><Style><IconStyle><scale>0.8</scale><heading>").append(number(heading, 0))
+                    out.append("<Placemark><name>").append(xml(text.shown(name))).append("</name>")
+                        .append("<description>").append(table(fields, text)).append("</description>")
+                        .append("<TimeStamp><when>").append(iso(p.timeMs)).append("</when></TimeStamp>")
+                        .append("<Style><IconStyle><scale>").append(number(ARROW_SCALE, 1)).append("</scale><heading>").append(number(heading, 0))
                         .append("</heading><Icon><href>").append(Picture.ARROW.href).append("</href></Icon></IconStyle>")
-                        .append("<LabelStyle><scale>0</scale></LabelStyle></Style><Point><coordinates>").append(coordinates(p))
+                        .append("<LabelStyle><scale>0</scale></LabelStyle>").append(BALLOON).append("</Style><Point><coordinates>").append(coordinates(p))
                         .append("</coordinates></Point></Placemark>\n")
                 }
             }
@@ -415,8 +440,8 @@ object TripExport {
     private fun styles(out: StringBuilder) {
         // Each has a balloon without Earth's "directions to here" links.
         val balloon = BALLOON
-        SPEED_COLOURS.forEachIndexed { i, colour -> out.append(lineStyle("speed$i", colour, 6)) }
-        G_COLOURS.forEachIndexed { i, colour -> out.append(lineStyle("g$i", colour, 6)) }
+        SPEED_COLOURS.forEachIndexed { i, colour -> out.append(lineStyle("speed$i", colour, PATH_WIDTH)) }
+        G_COLOURS.forEachIndexed { i, colour -> out.append(lineStyle("g$i", colour, PATH_WIDTH)) }
         SPEED_COLOURS.forEachIndexed { i, colour ->
             // See-through, so the ground and the path show through the wall.
             out.append("<Style id=\"wall$i\"><LineStyle><color>").append(kmlColour(colour))
@@ -513,8 +538,20 @@ object TripExport {
         band: Boolean = true,
     ): String {
         val out = StringBuilder("<Placemark><name>").append(xml(text.shown(name))).append("</name>")
-        val time = "${text.clock(stretch.points.first().timeMs)} – ${text.clock(stretch.points.last().timeMs)}"
-        out.append("<description>").append(table(listOf(text.timeLabel to time) + extra, text)).append("</description>")
+        val first = stretch.points.first()
+        val last = stretch.points.last()
+        val time = "${text.clock(first.timeMs)} – ${text.clock(last.timeMs)}"
+        var metres = 0.0
+        for (i in 1 until stretch.points.size) metres += Trips.distanceBetween(stretch.points[i - 1], stretch.points[i])
+        val seconds = (last.timeMs - first.timeMs) / 1000.0
+        val rows = listOfNotNull(
+            text.timeLabel to time,
+            seconds.takeIf { it > 0 }?.let { text.averageSpeedLabel to text.speed(metres / it) },
+            stretch.points.mapNotNull { it.speedMps }.maxOrNull()?.let { text.topSpeed to text.speed(it) },
+            text.distanceLabel to text.distance(metres),
+            stretch.points.mapNotNull(Trips::combinedG).maxOrNull()?.let { text.totalGLabel to "%.2f G".format(Locale.US, it) },
+        )
+        out.append("<description>").append(table(rows + extra, text)).append("</description>")
         out.append("<styleUrl>#").append(style).append(if (band) stretch.band.toString() else "").append("</styleUrl>")
         return out.toString()
     }
@@ -577,6 +614,17 @@ object TripExport {
         val units = total / text.metresPerDistanceUnit
         val every = listOf(1, 2, 5, 10, 20, 50, 100).first { units / it <= MAX_POSTS || it == 100 }
         return Trips.distancePosts(points, every * text.metresPerDistanceUnit)
+    }
+
+    /** How far along the drive each point is, the same way the summary measures it. */
+    private fun distancesFromStart(points: List<TripPoint>): Map<TripPoint, Double> {
+        val out = HashMap<TripPoint, Double>(points.size * 2)
+        var total = 0.0
+        points.forEachIndexed { i, p ->
+            if (i > 0) total += Trips.distanceBetween(points[i - 1], p)
+            out.putIfAbsent(p, total)
+        }
+        return out
     }
 
     /** Points along the path with the direction the car was going there. */
