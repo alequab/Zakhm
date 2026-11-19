@@ -151,6 +151,8 @@
     <string name="tool_reset_peaks">Reset peaks</string>
     <string name="tool_record">Record drive</string>
     <string name="tool_stop_recording">Stop recording</string>
+    <string name="drive_mode_on">Drive mode: hide everything but the readings</string>
+    <string name="drive_mode_off">Leave drive mode</string>
     <string name="tool_share_recording">Share raw data</string>
     <string name="share_title">Share drive recording</string>
     <string name="recording_error_start">Could not start recording</string>

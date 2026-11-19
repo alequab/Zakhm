@@ -145,6 +145,8 @@ class ScreenRenderTest {
     @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
     fun gFullScreenLandscape() {
         compose.setContent { TelemetryScreen(state(), UpdateState.None, true, settings, actions, startFocus = Focus.G) }
+        // A drive can be started without leaving full screen.
+        compose.onNodeWithContentDescription("Record drive").assertExists()
         save("focus-g-landscape")
     }
 
@@ -304,6 +306,46 @@ class ScreenRenderTest {
         save("g-style-ring-land")
         style = GStyle.WINDOW
         save("g-style-window-land")
+    }
+
+    /** The button hides all but the readings; a touch brings the rest back, and 20 s untouched hides it again. */
+    @Test
+    @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
+    fun driveModeHidesAllButTheReadingsUntilTouched() {
+        var driveMode by mutableStateOf(false)
+        compose.setContent {
+            TelemetryScreen(state(), UpdateState.None, true, settings.copy(driveMode = driveMode), ScreenActions(
+                requestPermission = {}, calibrate = {}, resetPeaks = {}, setUseMph = {}, setRotation = {}, setLanguage = {},
+                setTheme = { _, _ -> }, selectInput = {}, selectObdDevice = {}, requestBluetooth = {}, scanForAdapters = {},
+                toggleObdConnection = {}, selectCar = {}, addCar = {}, renameCar = { _, _ -> }, deleteCar = {},
+                saveUnknownCarToCurrent = {}, saveUnknownCarAsNew = {}, skipUnknownCar = {}, toggleRecording = {},
+                shareRecording = {}, startUpdate = {}, dismissUpdate = {}, setDriveMode = { driveMode = it },
+            ))
+        }
+        compose.onNodeWithText("RIGHT").assertExists()
+        compose.onNodeWithContentDescription("Drive mode", substring = true).performClick()
+        compose.waitForIdle()
+        // Only the readings, the status and the record button stay.
+        compose.onNodeWithText("RIGHT").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Record drive").assertExists()
+        compose.onNodeWithText("OBD-II", substring = true).assertExists()
+        save("drive-mode-landscape")
+        // A touch brings the rest back without also pressing what's under it.
+        compose.onNodeWithText("97").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("RIGHT").assertExists()
+        compose.onNodeWithText("KM/H").assertExists()
+        compose.mainClock.advanceTimeBy(21_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("RIGHT").assertDoesNotExist()
+        // Touch, then leave drive mode: everything stays.
+        compose.onNodeWithText("97").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Leave drive mode").performClick()
+        compose.mainClock.advanceTimeBy(21_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("RIGHT").assertExists()
     }
 
     @Test

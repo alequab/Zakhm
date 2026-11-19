@@ -139,6 +139,7 @@ class MainActivity : ComponentActivity() {
     private var gView by mutableStateOf(GView.CAR)
     private var gRange by mutableStateOf(DEFAULT_G_RANGE)
     private var gStyle by mutableStateOf(GStyle.CIRCLE)
+    private var driveMode by mutableStateOf(false)
 
     private val preferences by lazy { getSharedPreferences("settings", Context.MODE_PRIVATE) }
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -175,6 +176,7 @@ class MainActivity : ComponentActivity() {
         gView = GView.entries.firstOrNull { it.name == preferences.getString(KEY_G_VIEW, null) } ?: GView.CAR
         gRange = preferences.getFloat(KEY_G_RANGE, DEFAULT_G_RANGE.toFloat()).toDouble().takeIf { it in G_RANGES } ?: DEFAULT_G_RANGE
         gStyle = GStyle.entries.firstOrNull { it.name == preferences.getString(KEY_G_STYLE, null) } ?: GStyle.CIRCLE
+        driveMode = preferences.getBoolean(KEY_DRIVE_MODE, false)
 
         // Reading this asks a system service, so it can't be done on every frame.
         chosenLanguage = currentLanguage()
@@ -198,7 +200,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             // The dashboard redraws many times a second, and none of this changes with it.
-            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage, gView, gRange, gStyle, bluetoothOff) {
+            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage, gView, gRange, gStyle, bluetoothOff, driveMode) {
                 ScreenSettings(
                     useMph = useMph,
                     rotation = rotation,
@@ -211,6 +213,7 @@ class MainActivity : ComponentActivity() {
                     gStyle = gStyle,
                     pairedDevices = pairedDevices,
                     bluetoothOff = bluetoothOff,
+                    driveMode = driveMode,
                 )
             }
             TelemetryScreen(state, update, hasPermission, settings, actions)
@@ -225,6 +228,7 @@ class MainActivity : ComponentActivity() {
             resetPeaks = { controller.resetPeaks() },
             setUseMph = ::setUnits,
             setRotation = ::setRotationMode,
+            setDriveMode = ::setDriveModeChoice,
             setLanguage = ::setLanguage,
             setTheme = { theme, final -> controller.setTheme(theme, final) },
             selectInput = ::selectInput,
@@ -409,6 +413,11 @@ class MainActivity : ComponentActivity() {
         preferences.edit().putString(KEY_G_STYLE, style.name).apply()
     }
 
+    private fun setDriveModeChoice(on: Boolean) {
+        driveMode = on
+        preferences.edit().putBoolean(KEY_DRIVE_MODE, on).apply()
+    }
+
     private fun setRotationMode(mode: RotationMode) {
         rotation = mode
         preferences.edit().putString(KEY_ROTATION, mode.name).apply()
@@ -534,6 +543,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_G_VIEW = "g_view"
         const val KEY_G_RANGE = "g_range"
         const val KEY_G_STYLE = "g_style"
+        const val KEY_DRIVE_MODE = "drive_mode"
         const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
         const val KEY_ASKED_LOCATION = "asked_location"
         const val KEY_OPENED_TRIPS = "opened_trips"

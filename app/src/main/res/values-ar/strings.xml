@@ -151,6 +151,8 @@
     <string name="tool_reset_peaks">تصفير أعلى القيم</string>
     <string name="tool_record">تسجيل الرحلة</string>
     <string name="tool_stop_recording">إيقاف التسجيل</string>
+    <string name="drive_mode_on">وضع القيادة: إخفاء كل شيء عدا القراءات</string>
+    <string name="drive_mode_off">الخروج من وضع القيادة</string>
     <string name="tool_share_recording">مشاركة البيانات الخام</string>
     <string name="share_title">مشاركة تسجيل الرحلة</string>
     <string name="recording_error_start">تعذّر بدء التسجيل</string>

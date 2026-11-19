@@ -6,10 +6,11 @@ import org.junit.Test
 
 class RotationTest {
     @Test
-    fun aHeldPhoneShowsPortraitWhateverTheMode() {
-        RotationMode.entries.forEach { mode ->
-            assertEquals(mode.name, ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, screenOrientation(mode, heldInHand = true))
-        }
+    fun aHeldPhoneFollowsHowItIsHeldUnlessPortraitIsChosen() {
+        // Locking portrait while held made turning the phone wait until it was left alone.
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR, screenOrientation(RotationMode.AUTO, heldInHand = true))
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR, screenOrientation(RotationMode.LANDSCAPE, heldInHand = true))
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, screenOrientation(RotationMode.PORTRAIT, heldInHand = true))
     }
 
     @Test

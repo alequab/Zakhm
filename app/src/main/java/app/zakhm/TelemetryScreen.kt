@@ -1,5 +1,10 @@
 package app.zakhm
 
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import android.app.Activity
 import android.view.View
 import androidx.annotation.StringRes
@@ -153,6 +158,8 @@ data class ScreenSettings(
     val pairedDevices: List<ObdDevice> = emptyList(),
     /** Bluetooth is off, so Android lists no paired devices. */
     val bluetoothOff: Boolean = false,
+    /** While driving, the dashboard keeps only the readings once it has been left untouched a while. */
+    val driveMode: Boolean = false,
 )
 
 /** The zoom choices for the G circle; road cars rarely pass 1 G. */
@@ -194,6 +201,7 @@ class ScreenActions(
     val openTrip: (SavedTrip) -> Unit = {},
     /** Asks Android to switch Bluetooth on, which the person confirms. */
     val enableBluetooth: () -> Unit = {},
+    val setDriveMode: (Boolean) -> Unit = {},
 )
 
 
@@ -221,6 +229,9 @@ internal object DashType {
     /** A page's title in its top bar. */
     val Title = 20.sp
 }
+
+/** How long drive mode waits after the last touch before it hides all but the readings. */
+private const val DRIVE_MODE_IDLE_MS = 20_000L
 
 private const val FOCUS_FADE_OUT_MS = 90
 private const val FOCUS_FADE_IN_MS = 180
@@ -362,6 +373,27 @@ enum class Focus { SPEED, G }
 private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions: ScreenActions, startFocus: Focus? = null) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var focus by rememberSaveable { mutableStateOf(startFocus) }
+
+    // Drive mode: once the screen has been left untouched a while, only the readings stay, with
+    // the status and the record button. Any touch brings the rest back for another while.
+    var clean by remember { mutableStateOf(false) }
+    var touches by remember { mutableIntStateOf(0) }
+    LaunchedEffect(touches, settings.driveMode, showSettings) {
+        if (!settings.driveMode || showSettings) {
+            clean = false
+            return@LaunchedEffect
+        }
+        if (!clean) {
+            delay(DRIVE_MODE_IDLE_MS)
+            clean = true
+        }
+    }
+    val enterDriveMode = {
+        actions.setDriveMode(true)
+        // Straight to the clean view, so the button visibly does something.
+        clean = true
+    }
+
     if (showSettings) {
         // Settings take the whole screen, so the instruments stop drawing while they're open.
         SettingsScreen(state, settings, actions, onClose = { showSettings = false })
@@ -383,11 +415,32 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
     val density = LocalDensity.current
     val instrumentDensity = remember(density) { Density(density.density, min(density.fontScale, MAX_INSTRUMENT_FONT_SCALE)) }
     CompositionLocalProvider(LocalDensity provides instrumentDensity) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize().pointerInput(Unit) {
+            // Every touch counts, wherever it lands. In the clean view the first touch only
+            // brings the rest back, rather than also pressing whatever is under it.
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    if (event.type != PointerEventType.Press) continue
+                    if (clean) event.changes.forEach { it.consume() }
+                    clean = false
+                    touches++
+                }
+            }
+        },
+    ) {
         val landscape = maxWidth > maxHeight
+        // The best peaks are for after the drive, so the clean view leaves them out.
+        val showPeaks = !clean
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Full screen gives the header's room to the instrument, but keeps the status line.
-            if (focus == null) Header(state, settings.useMph, actions.toggleRecording) { showSettings = true } else FocusStatus(state, settings.useMph)
+            // Full screen and the clean view give the header's room to the instruments, but keep
+            // the status line and the record button.
+            if (focus == null && !clean) {
+                Header(state, settings.useMph, actions.toggleRecording, settings.driveMode, enterDriveMode, { actions.setDriveMode(false) }) { showSettings = true }
+            } else {
+                FocusStatus(state, settings.useMph, actions.toggleRecording)
+            }
             // A short fade through, so the change of view reads as one move. Android's
             // "remove animations" setting turns it into a cut.
             AnimatedContent(
@@ -405,18 +458,18 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                     shown == Focus.G && landscape ->
                         Row(Modifier.fillMaxSize(), horizontalArrangement = gap) {
                             GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)), large = true)
-                            PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
+                            if (showPeaks) PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
                         }
                     shown == Focus.G ->
                         Column(Modifier.fillMaxSize(), verticalArrangement = gap) {
                             GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)), large = true)
-                            PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
+                            if (showPeaks) PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
                         }
                     landscape ->
                         Row(Modifier.fillMaxSize(), horizontalArrangement = gap) {
                             SpeedDial(s, settings.useMph, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.SPEED)))
                             GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.weight(1f).fillMaxHeight().then(tapToFocus(Focus.G)))
-                            PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
+                            if (showPeaks) PeakColumn(s, Modifier.width(92.dp).fillMaxHeight())
                         }
                     else ->
                         Column(Modifier.fillMaxSize(), verticalArrangement = gap) {
@@ -424,7 +477,7 @@ private fun Dashboard(state: TelemetryUiState, settings: ScreenSettings, actions
                             // leaves room under its arc, so the circle gets the larger share.
                             SpeedDial(s, settings.useMph, Modifier.fillMaxWidth().weight(PORTRAIT_DIAL_WEIGHT).then(tapToFocus(Focus.SPEED)))
                             GMeter(s, settings.gView, settings.gRange, settings.gStyle, Modifier.fillMaxWidth().weight(1f).then(tapToFocus(Focus.G)))
-                            PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
+                            if (showPeaks) PeakRow(s, Modifier.fillMaxWidth().height(60.dp))
                         }
                 }
             }
@@ -475,7 +528,15 @@ private fun UnknownCarDialog(identity: CarIdentity, state: TelemetryUiState, act
 }
 
 @Composable
-private fun Header(state: TelemetryUiState, useMph: Boolean, onToggleRecording: () -> Unit, onOpenSettings: () -> Unit) {
+private fun Header(
+    state: TelemetryUiState,
+    useMph: Boolean,
+    onToggleRecording: () -> Unit,
+    driveMode: Boolean,
+    onEnterDriveMode: () -> Unit,
+    onLeaveDriveMode: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val (statusText, statusColor) = speedStatus(state, useMph)
     val s = state.snapshot
     val settingsLabel = stringResource(R.string.settings)
@@ -492,6 +553,13 @@ private fun Header(state: TelemetryUiState, useMph: Boolean, onToggleRecording: 
             StatusLine(statusText, statusColor)
         }
         RecordButton(state, onToggleRecording)
+        val driveLabel = stringResource(if (driveMode) R.string.drive_mode_off else R.string.drive_mode_on)
+        IconButton(
+            onClick = if (driveMode) onLeaveDriveMode else onEnterDriveMode,
+            modifier = Modifier.semantics { contentDescription = driveLabel },
+        ) {
+            SteeringWheelIcon(lit = driveMode)
+        }
         IconButton(onClick = onOpenSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
             SlidersIcon()
         }
@@ -513,18 +581,6 @@ private fun StatusLine(text: String, color: Color, modifier: Modifier = Modifier
             maxLines = 1,
         )
     }
-}
-
-@Composable
-private fun RecordingBadge(state: TelemetryUiState) {
-    if (!state.recording) return
-    Box(Modifier.size(8.dp).background(Alert, CircleShape))
-    Text(
-        " %d:%02d".format(Locale.US, state.recordingSeconds / 60, state.recordingSeconds % 60),
-        color = Alert,
-        fontSize = DashType.Body,
-        style = TabularDigits,
-    )
 }
 
 /**
@@ -577,13 +633,34 @@ private fun RecordButton(state: TelemetryUiState, onToggle: () -> Unit) {
 private const val RECORD_STOP_SHARE = 0.4f
 private const val RECORD_DOT_SHARE = 0.27f
 
-/** The status alone, for full screen: an estimated or lost speed must never go unexplained. */
+/**
+ * The status and the record button, for full screen: an estimated or lost speed must never go
+ * unexplained, and a drive can be started or stopped without leaving the full view.
+ */
 @Composable
-private fun FocusStatus(state: TelemetryUiState, useMph: Boolean) {
+private fun FocusStatus(state: TelemetryUiState, useMph: Boolean, onToggleRecording: () -> Unit) {
     val (statusText, statusColor) = speedStatus(state, useMph)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         StatusLine(statusText, statusColor, Modifier.weight(1f))
-        RecordingBadge(state)
+        RecordButton(state, onToggleRecording)
+    }
+}
+
+/** A steering wheel: drive mode. In the theme colour while it's on. */
+@Composable
+private fun SteeringWheelIcon(lit: Boolean) {
+    val color = if (lit) Accent else Secondary
+    Canvas(Modifier.size(22.dp)) {
+        val stroke = 2.dp.toPx()
+        val radius = size.minDimension / 2 - stroke / 2
+        drawCircle(color, radius, style = Stroke(stroke))
+        val hub = size.minDimension * 0.13f
+        drawCircle(color, hub)
+        // Three spokes: left, right, and down to the bottom of the rim.
+        val r = radius - stroke / 2
+        drawLine(color, center, center + Offset(-r, 0f), stroke, StrokeCap.Round)
+        drawLine(color, center, center + Offset(r, 0f), stroke, StrokeCap.Round)
+        drawLine(color, center, center + Offset(0f, r), stroke, StrokeCap.Round)
     }
 }
 

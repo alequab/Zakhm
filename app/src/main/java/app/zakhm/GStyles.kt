@@ -25,9 +25,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -191,9 +191,11 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
     // Left and right are the car's real directions, so they never mirror for Arabic.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         BoxWithConstraints(modifier.panel().padding(12.dp), contentAlignment = Alignment.Center) {
-            // As wide as the panel allows, at the frames' own shape.
-            val width = minOf(maxWidth, maxHeight * FRAMES_ASPECT, if (large) 560.dp else 420.dp)
-            val height = width / FRAMES_ASPECT
+            // As big as the panel allows: long and low in a wide panel, taller in a tall one, so a
+            // portrait panel isn't left mostly empty above and below.
+            val aspect = (maxWidth / maxHeight).coerceIn(FRAMES_MIN_ASPECT, FRAMES_MAX_ASPECT)
+            val width = minOf(maxWidth, maxHeight * aspect, if (large) 640.dp else 440.dp)
+            val height = width / aspect
             Box(Modifier.width(width).height(height), contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxSize()) {
                     val gap = size.height * FRAME_GAP_SHARE
@@ -218,30 +220,20 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
                         // The way of the push on screen, as on the circle: x right, y down.
                         val x = (-sign * lat).toFloat()
                         val y = (-sign * long).toFloat()
-                        val angle = Math.toDegrees(kotlin.math.atan2(y.toDouble(), x.toDouble())).toFloat()
-                        // (The angle is taken on the G values, before the frames' width stretches it.)
+                        // (The angle is taken on the G values; each frame's point is found in the same
+                        // stretched terms, so a push at the top lights the top whatever the frames' shape.)
+                        val angle = kotlin.math.atan2(y, x)
                         val strength = share(total, range)
-                        // Wider as the push grows, as in a hard corner the light spreads along the side.
-                        val spread = MARK_MIN_DEGREES + (MARK_MAX_DEGREES - MARK_MIN_DEGREES) * strength
-                        // The wedge is stretched to the frames' shape, so a mark at the top is as wide a share
-                        // of the frame as one at the side.
-                        val wedge = Path().apply {
-                            moveTo(center.x, center.y)
-                            for (step in 0..WEDGE_STEPS) {
-                                val t = Math.toRadians((angle - spread / 2 + spread * step / WEDGE_STEPS).toDouble())
-                                lineTo(center.x + (kotlin.math.cos(t) * size.width).toFloat(), center.y + (kotlin.math.sin(t) * size.height).toFloat())
-                            }
-                            close()
-                        }
+                        // Longer as the push grows, as in a hard corner the light spreads along the side.
+                        val spread = MARK_MIN_SHARE + (MARK_MAX_SHARE - MARK_MIN_SHARE) * strength
                         // The frames light from the number outward: the inner one at once, the others as the push grows.
-                        clipPath(wedge) {
-                            for (ring in 0 until LIT_FRAMES) {
-                                if (strength < ring.toFloat() / LIT_FRAMES) continue
-                                val path = frame(FRAME_COUNT - 2 - ring)
-                                val color = ringColors[ring]
-                                drawPath(path, color.copy(alpha = 0.25f), style = Stroke(gap * 0.9f))
-                                drawPath(path, color, style = Stroke(gap * 0.45f, cap = StrokeCap.Round))
-                            }
+                        for (ring in 0 until LIT_FRAMES) {
+                            if (strength < ring.toFloat() / LIT_FRAMES) continue
+                            val lit = litStretch(frame(FRAME_COUNT - 2 - ring), angle, spread)
+                            val color = ringColors[ring]
+                            // A soft glow along the same stretch, then the light itself, both with round ends.
+                            drawPath(lit, color.copy(alpha = 0.16f), style = Stroke(gap * 0.85f, cap = StrokeCap.Round))
+                            drawPath(lit, color, style = Stroke(gap * 0.42f, cap = StrokeCap.Round))
                         }
                     }
 
@@ -251,7 +243,8 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
                 }
                 if (waiting != null) {
                     // Inside the number's box, wrapping onto two lines rather than running past its frames.
-                    Box(Modifier.width(width * WAITING_WIDTH_SHARE), contentAlignment = Alignment.Center) {
+                    val boxWidth = width - height * (2 * FRAME_GAP_SHARE * (FRAME_COUNT - 1)) - 16.dp
+                    Box(Modifier.width(boxWidth), contentAlignment = Alignment.Center) {
                         Waiting(waiting, if (large) 15 else 12)
                     }
                 } else {
@@ -278,13 +271,64 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
 /** Four frames: three that light, and the number's box inside them. */
 private const val FRAME_COUNT = 4
 private const val LIT_FRAMES = 3
-private const val FRAMES_ASPECT = 2.1f
+private const val FRAMES_MIN_ASPECT = 1.6f
+private const val FRAMES_MAX_ASPECT = 2.1f
 private const val FRAME_GAP_SHARE = 0.11f
 private const val FRAME_CORNER_SHARE = 0.32f
-private const val MARK_MIN_DEGREES = 40f
-private const val MARK_MAX_DEGREES = 100f
-private const val WEDGE_STEPS = 16
+
+/** How much of a frame's length lights: a light push, and a push at the top of the range. */
+private const val MARK_MIN_SHARE = 0.11f
+private const val MARK_MAX_SHARE = 0.28f
+
+/** Points tried along a frame when finding where the push points. */
+private const val FRAME_SAMPLES = 96
 private const val WINDOW_NUMBER_SHARE = 0.2f
 
-/** The number box's inner width against the frames', less some room. */
-private const val WAITING_WIDTH_SHARE = 0.62f
+/**
+ * The stretch of [frame] centred where it lies in the direction [angle] (radians, x right, y down,
+ * in the frame's own stretched terms), [share] of its length long. Drawn as a piece of the frame
+ * itself, so its ends are round and follow the frame rather than being cut off straight.
+ */
+private fun litStretch(frame: Path, angle: Float, share: Float): Path {
+    val measure = PathMeasure().apply { setPath(frame, true) }
+    val length = measure.length
+    val bounds = frame.getBounds()
+    var best = 0f
+    var bestGap = Float.MAX_VALUE
+    for (i in 0 until FRAME_SAMPLES) {
+        val at = length * i / FRAME_SAMPLES
+        val p = measure.getPosition(at)
+        val a = kotlin.math.atan2((p.y - bounds.center.y) / bounds.height, (p.x - bounds.center.x) / bounds.width)
+        val gap = kotlin.math.abs(wrapAngle(a - angle))
+        if (gap < bestGap) {
+            bestGap = gap
+            best = at
+        }
+    }
+    val half = length * share / 2
+    val start = best - half
+    val end = best + half
+    return Path().also { out ->
+        // The frame's start point may fall inside the stretch, so it can come in two pieces.
+        when {
+            start < 0f -> {
+                measure.getSegment(length + start, length, out, true)
+                measure.getSegment(0f, end, out, false)
+            }
+            end > length -> {
+                measure.getSegment(start, length, out, true)
+                measure.getSegment(0f, end - length, out, false)
+            }
+            else -> measure.getSegment(start, end, out, true)
+        }
+    }
+}
+
+/** An angle difference brought into -π..π. */
+private fun wrapAngle(a: Float): Float {
+    val turn = (2 * Math.PI).toFloat()
+    var r = a % turn
+    if (r > Math.PI) r -= turn
+    if (r < -Math.PI) r += turn
+    return r
+}
