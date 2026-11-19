@@ -28,11 +28,19 @@ internal const val OBD_SLOW_RETRY_MS = 15_000L
 class ObdConnection(
     private val context: Context,
     private val adapter: BluetoothAdapter,
-    private val address: String,
+    /**
+     * The adapters to try, in turn after each failure: the car's own first, then the other saved
+     * cars' adapters, so the one in the car the phone is in answers even if a different car is chosen.
+     */
+    private val addresses: List<String>,
     private val onState: (ObdState) -> Unit,
     /** Speed in km/h, stamped with the middle of the request (or the moment heard) on the elapsedRealtime clock. */
     private val onSpeed: (kmh: Double, nanos: Long, reading: ObdReading) -> Unit,
     private val onVin: (String) -> Unit,
+    /** Which adapter answered, before its VIN is read. */
+    private val onLinked: (address: String) -> Unit = {},
+    /** How long to wait after [failures] failures in a row. */
+    private val retryDelayMs: (failures: Int) -> Long = ::obdRetryDelayMs,
 ) {
     private enum class LinkType { CLASSIC_SECURE, CLASSIC_INSECURE, BLE }
 
@@ -53,54 +61,58 @@ class ObdConnection(
     }
 
     private fun run() {
-        // Cheap adapters often accept only one way of connecting, so keep trying each.
-        var attempt = 0
-        // Failures since the last good connection, which slow the retries down.
+        // Cheap adapters often accept only one way of connecting, so keep trying each, per adapter.
+        val attempts = HashMap<String, Int>()
+        // Failures since the last good connection, which slow the retries down and move on to the next adapter.
         var failures = 0
         // Once a way of connecting has worked, only that one is tried again: with Bluetooth
         // just switched back on, Android may not know the adapter is Bluetooth LE.
-        var worked: LinkType? = null
+        val worked = HashMap<String, LinkType>()
         while (running) {
             if (!adapter.isEnabled) {
                 // Nothing can connect, so wait quietly instead of failing every few seconds.
                 if (!waitForBluetooth()) return
-                attempt = 0
+                attempts.clear()
                 failures = 0
                 continue
             }
             // After a failure, keep saying so during retries instead of flicking back to "connecting".
             if (failures == 0) onState(ObdState.CONNECTING)
+            val address = addresses[failures % addresses.size]
+            fun failed() {
+                attempts[address] = (attempts[address] ?: 0) + 1
+                failures++
+            }
             try {
                 val device = adapter.getRemoteDevice(address)
-                val types = worked?.let { listOf(it) } ?: linkTypesFor(device)
-                val type = types[attempt % types.size]
+                val types = worked[address]?.let { listOf(it) } ?: linkTypesFor(device)
+                val type = types[(attempts[address] ?: 0) % types.size]
                 val client = ObdClient(open(device, type))
                 if (!client.initialize()) throw IOException("Adapter rejected setup")
-                worked = type
+                worked[address] = type
                 failures = 0
+                onLinked(address)
                 client.readVin()?.let(onVin)
                 poll(client)
             } catch (_: IOException) {
-                attempt++
-                failures++
+                failed()
                 if (running) onState(ObdState.FAILED)
             } catch (_: SecurityException) {
-                failures++
+                failed()
                 if (running) onState(ObdState.FAILED)
             } catch (_: IllegalArgumentException) {
-                failures++
+                failed()
                 if (running) onState(ObdState.FAILED)
             } catch (_: InterruptedException) {
                 return
             } catch (_: RuntimeException) {
                 // Android's Bluetooth code can throw almost anything, and this thread must not take the app down.
-                attempt++
-                failures++
+                failed()
                 if (running) onState(ObdState.FAILED)
             } finally {
                 closeLink()
             }
-            if (running && !pause(obdRetryDelayMs(failures))) return
+            if (running && !pause(retryDelayMs(failures))) return
         }
     }
 

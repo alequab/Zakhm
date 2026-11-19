@@ -544,27 +544,62 @@ class TelemetryController(private val context: Context) {
     }
 
     private fun startObdIfSelected() {
-        val address = obdAddress
-        val adapter = bluetoothManager?.adapter
-        if (router.selected != SpeedInput.OBD || address == null || adapter == null) return
+        val adapter = bluetoothManager?.adapter ?: return
         if (obdDisconnected) {
-            obdState = ObdState.DISCONNECTED
+            if (router.selected == SpeedInput.OBD) obdState = ObdState.DISCONNECTED
             return
         }
+        // This car's own adapter, when it gets its speed from OBD-II.
+        val own = obdAddress?.takeIf { router.selected == SpeedInput.OBD }
+        // The other saved cars' adapters, tried in turn after this car's own: the adapter in the car
+        // the phone is really in answers, and its VIN brings that car back.
+        val others = cars.cars.mapNotNull { it.obdAddress }.filterNot { it.equals(own, ignoreCase = true) }.distinct()
+        val addresses = listOfNotNull(own) + others
+        if (addresses.isEmpty()) return
+        // Without an adapter of its own, this car only listens for the others now and then, to recognise them.
+        val probing = own == null
         // A stopped connection's last messages can still be on their way, and must not act on the new choice.
         val session = ++obdSession
         fun current(action: () -> Unit) = handler.post { if (session == obdSession) action() }
+        linkedObd = null
         obdConnection = ObdConnection(
             context = context,
             adapter = adapter,
-            address = address,
-            onState = { state -> current { obdState = state } },
+            addresses = addresses,
+            // A background search shows nothing: this car's speed comes from elsewhere.
+            onState = { state -> current { if (!probing) obdState = state } },
             onSpeed = { kmh, nanos, reading -> current { onObdSpeed(kmh, nanos, reading) } },
             onVin = { vin ->
                 val name = context.getString(R.string.car_vin_name, vin.takeLast(CarIdentity.VIN_NAME_LENGTH))
-                current { onCarIdentified(CarIdentity.fromVin(vin, name), viaObd = true) }
+                current { onObdVin(CarIdentity.fromVin(vin, name), probing) }
             },
+            onLinked = { address -> current { linkedObd = address } },
+            retryDelayMs = if (probing) { _ -> OBD_PROBE_RETRY_MS } else ::obdRetryDelayMs,
         ).also { it.start() }
+    }
+
+    /** The adapter that answered, which may be another saved car's. */
+    private var linkedObd: String? = null
+
+    /**
+     * A VIN came in. Over this car's own adapter it's the usual check. Over another car's,
+     * only a saved car counts: the phone is in that car, so it becomes the car in use.
+     */
+    private fun onObdVin(identity: CarIdentity, probing: Boolean) {
+        if (!probing && linkedObd.equals(obdAddress, ignoreCase = true)) {
+            onCarIdentified(identity, viaObd = true)
+            return
+        }
+        val car = cars.cars.firstOrNull { it.identityKey == identity.key }
+        if (car == null || car.id == cars.active.id) {
+            // Nothing to switch to. A background search has done its job, and stops to spare the battery.
+            if (probing) stopObd()
+            return
+        }
+        captureActiveCar()
+        val before = cars.active
+        cars.selectKnown(identity)
+        finishIdentifying(before, viaObd = false, R.string.car_notice_recognized)
     }
 
     private fun stopObd() {
@@ -737,6 +772,8 @@ class TelemetryController(private val context: Context) {
         const val SENSOR_PERIOD_US = 5000
         const val MAX_RECORDINGS = 20
         const val RECORDER_FLUSH_INTERVAL_MS = 5000L
+        /** A background search for other cars' adapters tries once a minute: it only recognises the car. */
+        const val OBD_PROBE_RETRY_MS = 60_000L
         const val MAX_TRIP_POSITION_ERROR_M = 50f
         const val CAR_NOTICE_MS = 6000L
         const val KEY_TRUST_ERRORS = "error_squares"
