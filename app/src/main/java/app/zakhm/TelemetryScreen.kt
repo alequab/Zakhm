@@ -819,7 +819,7 @@ private fun GMeter(s: TelemetrySnapshot, view: GView, range: Double, style: GSty
     when (style) {
         GStyle.CIRCLE -> GCircle(s, view, range, modifier, large)
         GStyle.RING -> GRing(s, range, waiting, modifier, large)
-        GStyle.WINDOW -> GWindow(s, range, waiting, modifier, large)
+        GStyle.WINDOW -> GWindow(s, view, range, waiting, modifier, large)
     }
 }
 

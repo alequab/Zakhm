@@ -2,8 +2,6 @@ package app.zakhm
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -17,8 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -31,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -42,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.zakhm.core.TelemetrySnapshot
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.hypot
 
@@ -54,7 +50,7 @@ enum class GStyle(@StringRes val label: Int) {
     /** A ring that fills with the push, between a braking bar and an accelerating bar. */
     RING(R.string.g_style_ring),
 
-    /** A framed window with the number, a curved bar under it, and which way the push is. */
+    /** Nested frames around the number, lit on the side the push goes, more of them the harder it is. */
     WINDOW(R.string.g_style_window),
 }
 
@@ -82,6 +78,8 @@ private fun Waiting(text: String, size: Int) {
         text,
         color = Accent,
         fontSize = size.sp,
+        maxLines = 3,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
         style = TextStyle(textDirection = TextDirection.Content),
         modifier = Modifier.padding(horizontal = 8.dp),
@@ -177,107 +175,116 @@ private fun PedalBar(share: Float, color: Color, @StringRes label: Int, modifier
 }
 
 /**
- * A framed window like a steering-wheel display: which way the push is, the number, and a
- * curved bar that fills with it. Arrows at the sides light up in a turn.
+ * Nested frames around the number, lit on the side the push goes. The harder the push, the
+ * more frames light, outward from the number, and the wider the lit part: the theme colour
+ * first, then white, then the alert colour on the outermost.
  */
 @Composable
-internal fun GWindow(s: TelemetrySnapshot, range: Double, waiting: String?, modifier: Modifier, large: Boolean) {
+internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: String?, modifier: Modifier, large: Boolean) {
     val colors = LocalDash.current
     val long = s.longitudinalG
     val lat = s.lateralG
     val total = s.totalG ?: 0.0
-    val fill = if (total >= HIGH_G) colors.alert else colors.accent
-    val direction = when {
-        long == null || lat == null || total < DIRECTION_MIN_G -> null
-        abs(long) >= abs(lat) -> if (long > 0) R.string.peak_accel else R.string.peak_brake
-        else -> if (lat > 0) R.string.peak_left else R.string.peak_right
-    }
-    val windowShape = RoundedCornerShape(if (large) 28.dp else 20.dp)
+    // The same way round as the circle: the car's movement, or the push felt in the seat.
+    val sign = if (view == GView.DRIVER) -1.0 else 1.0
+    val ringColors = listOf(colors.accent, colors.primary, colors.alert)
     // Left and right are the car's real directions, so they never mirror for Arabic.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Box(modifier.panel().padding(12.dp), contentAlignment = Alignment.Center) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-            ) {
-                val turn = share(abs(lat ?: 0.0), range)
-                SideArrow(pointsLeft = true, lit = (lat ?: 0.0) > DIRECTION_MIN_G, strength = turn, color = fill)
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .widthIn(max = if (large) 460.dp else 340.dp)
-                        .border(2.dp, fill.copy(alpha = 0.5f), windowShape)
-                        .background(colors.background, windowShape)
-                        .padding(horizontal = 16.dp, vertical = if (large) 20.dp else 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        direction?.let { stringResource(it) } ?: " ",
-                        color = fill,
-                        fontSize = if (large) 16.sp else DashType.Label,
-                        letterSpacing = 2.sp,
-                        maxLines = 1,
-                    )
-                    if (waiting != null) {
-                        Waiting(waiting, if (large) 16 else 13)
-                    } else {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(gText(s.totalG), color = colors.primary, fontSize = if (large) 72.sp else 48.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                stringResource(R.string.unit_g),
-                                color = colors.secondary,
-                                fontSize = if (large) 24.sp else 16.sp,
-                                modifier = Modifier.padding(start = 4.dp, bottom = if (large) 10.dp else 6.dp),
+        BoxWithConstraints(modifier.panel().padding(12.dp), contentAlignment = Alignment.Center) {
+            // As wide as the panel allows, at the frames' own shape.
+            val width = minOf(maxWidth, maxHeight * FRAMES_ASPECT, if (large) 560.dp else 420.dp)
+            val height = width / FRAMES_ASPECT
+            Box(Modifier.width(width).height(height), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val gap = size.height * FRAME_GAP_SHARE
+                    val line = 2.dp.toPx()
+                    fun frame(i: Int): Path {
+                        // Frame 0 is the outermost; the number sits inside the last one.
+                        val inset = gap * i + line
+                        val w = size.width - 2 * inset
+                        val h = size.height - 2 * inset
+                        return Path().apply {
+                            addRoundRect(
+                                androidx.compose.ui.geometry.RoundRect(
+                                    inset, inset, inset + w, inset + h,
+                                    CornerRadius(h * FRAME_CORNER_SHARE, h * FRAME_CORNER_SHARE),
+                                ),
                             )
                         }
                     }
-                    CurvedBar(share(total, range), fill, Modifier.fillMaxWidth().height(if (large) 26.dp else 18.dp))
+                    for (i in 0 until FRAME_COUNT) drawPath(frame(i), colors.track, style = Stroke(line))
+
+                    if (long != null && lat != null && total >= DIRECTION_MIN_G) {
+                        // The way of the push on screen, as on the circle: x right, y down.
+                        val x = (-sign * lat).toFloat()
+                        val y = (-sign * long).toFloat()
+                        val angle = Math.toDegrees(kotlin.math.atan2(y.toDouble(), x.toDouble())).toFloat()
+                        // (The angle is taken on the G values, before the frames' width stretches it.)
+                        val strength = share(total, range)
+                        // Wider as the push grows, as in a hard corner the light spreads along the side.
+                        val spread = MARK_MIN_DEGREES + (MARK_MAX_DEGREES - MARK_MIN_DEGREES) * strength
+                        // The wedge is stretched to the frames' shape, so a mark at the top is as wide a share
+                        // of the frame as one at the side.
+                        val wedge = Path().apply {
+                            moveTo(center.x, center.y)
+                            for (step in 0..WEDGE_STEPS) {
+                                val t = Math.toRadians((angle - spread / 2 + spread * step / WEDGE_STEPS).toDouble())
+                                lineTo(center.x + (kotlin.math.cos(t) * size.width).toFloat(), center.y + (kotlin.math.sin(t) * size.height).toFloat())
+                            }
+                            close()
+                        }
+                        // The frames light from the number outward: the inner one at once, the others as the push grows.
+                        clipPath(wedge) {
+                            for (ring in 0 until LIT_FRAMES) {
+                                if (strength < ring.toFloat() / LIT_FRAMES) continue
+                                val path = frame(FRAME_COUNT - 2 - ring)
+                                val color = ringColors[ring]
+                                drawPath(path, color.copy(alpha = 0.25f), style = Stroke(gap * 0.9f))
+                                drawPath(path, color, style = Stroke(gap * 0.45f, cap = StrokeCap.Round))
+                            }
+                        }
+                    }
+
+                    // The number's own box, the innermost frame filled in.
+                    drawPath(frame(FRAME_COUNT - 1), colors.background)
+                    drawPath(frame(FRAME_COUNT - 1), colors.secondary.copy(alpha = 0.6f), style = Stroke(line))
                 }
-                SideArrow(pointsLeft = false, lit = (lat ?: 0.0) < -DIRECTION_MIN_G, strength = turn, color = fill)
+                if (waiting != null) {
+                    // Inside the number's box, wrapping onto two lines rather than running past its frames.
+                    Box(Modifier.width(width * WAITING_WIDTH_SHARE), contentAlignment = Alignment.Center) {
+                        Waiting(waiting, if (large) 15 else 12)
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            gText(s.totalG),
+                            color = colors.primary,
+                            fontSize = (height.value * WINDOW_NUMBER_SHARE).sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            stringResource(R.string.unit_g),
+                            color = colors.secondary,
+                            fontSize = (height.value * WINDOW_NUMBER_SHARE * 0.5f).sp,
+                            modifier = Modifier.padding(start = 3.dp, bottom = (height.value * 0.03f).dp),
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-/** A shallow arc under the number, filling from the left with the push. */
-@Composable
-private fun CurvedBar(share: Float, color: Color, modifier: Modifier) {
-    val track = LocalDash.current.track
-    Canvas(modifier) {
-        val width = size.height * 0.35f
-        val sag = size.height - width
-        fun curve(until: Float) = Path().apply {
-            moveTo(width / 2, width / 2)
-            // A quadratic curve split at [until], so the fill follows the same bend as the track.
-            val end = until.coerceIn(0f, 1f)
-            val steps = 24
-            for (i in 1..steps) {
-                val t = end * i / steps
-                val x = width / 2 + (size.width - width) * t
-                val y = width / 2 + sag * 4 * t * (1 - t)
-                lineTo(x, y)
-            }
-        }
-        drawPath(curve(1f), track, style = Stroke(width, cap = StrokeCap.Round))
-        if (share > 0f) drawPath(curve(share), color, style = Stroke(width, cap = StrokeCap.Round))
-    }
-}
+/** Four frames: three that light, and the number's box inside them. */
+private const val FRAME_COUNT = 4
+private const val LIT_FRAMES = 3
+private const val FRAMES_ASPECT = 2.1f
+private const val FRAME_GAP_SHARE = 0.11f
+private const val FRAME_CORNER_SHARE = 0.32f
+private const val MARK_MIN_DEGREES = 40f
+private const val MARK_MAX_DEGREES = 100f
+private const val WEDGE_STEPS = 16
+private const val WINDOW_NUMBER_SHARE = 0.2f
 
-/** An arrow beside the window that lights up, brighter the harder the turn. */
-@Composable
-private fun SideArrow(pointsLeft: Boolean, lit: Boolean, strength: Float, color: Color) {
-    val track = LocalDash.current.track
-    Canvas(Modifier.width(18.dp).height(28.dp)) {
-        val tip = if (pointsLeft) 0f else size.width
-        val back = if (pointsLeft) size.width else 0f
-        val path = Path().apply {
-            moveTo(tip, size.height / 2)
-            lineTo(back, 0f)
-            lineTo(back, size.height)
-            close()
-        }
-        drawPath(path, if (lit) color.copy(alpha = 0.4f + 0.6f * strength) else track)
-    }
-}
+/** The number box's inner width against the frames', less some room. */
+private const val WAITING_WIDTH_SHARE = 0.62f

@@ -273,6 +273,29 @@ class ScreenRenderTest {
         }
     }
 
+    /** The window lit for a light push, medium and strong turns, and hard braking felt in the seat. */
+    @Test
+    @Config(qualifiers = "w432dp-h960dp-port-xxhdpi")
+    fun windowStates() {
+        var reading by mutableStateOf(driving)
+        var view by mutableStateOf(GView.CAR)
+        compose.setContent { TelemetryScreen(state(snapshot = reading), UpdateState.None, true, settings.copy(gStyle = GStyle.WINDOW, gView = view), actions) }
+        listOf(
+            "light" to driving.copy(longitudinalG = 0.12, lateralG = 0.0, totalG = 0.12),
+            "medium-left" to driving.copy(longitudinalG = 0.05, lateralG = 0.45, totalG = 0.45),
+            "strong-right" to driving.copy(longitudinalG = -0.1, lateralG = -0.85, totalG = 0.86),
+        ).forEach { (name, snapshot) ->
+            reading = snapshot
+            save("g-window-$name")
+        }
+        view = GView.DRIVER
+        reading = driving.copy(longitudinalG = -0.7, lateralG = 0.0, totalG = 0.7)
+        save("g-window-braking-felt")
+        // While still learning, the message stays inside the number's box.
+        reading = driving.copy(calibration = CalibrationState.LEARNING_FORWARD, longitudinalG = null, lateralG = null, totalG = null)
+        save("g-window-learning")
+    }
+
     @Test
     @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
     fun gForceStylesLandscape() {
