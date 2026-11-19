@@ -105,6 +105,14 @@
     <string name="car_notice_new">New car saved: %1$s</string>
     <string name="car_notice_recognized">Recognized: %1$s</string>
     <string name="car_notice_saved">Saved to %1$s</string>
+    <string name="car_notice_bluetooth">Recognized by its Bluetooth: %1$s</string>
+    <string name="section_car_bluetooth">Car\'s Bluetooth</string>
+    <string name="car_bluetooth_hint">For a car without OBD-II or Android Auto: link its own Bluetooth, such as its stereo, and Zakhm switches to this car whenever the phone connects to it.</string>
+    <string name="car_bluetooth_choose">Choose the car\'s Bluetooth from the devices paired with this phone:</string>
+    <string name="car_bluetooth_off">Bluetooth is off, so the phone\'s paired devices can\'t be listed.</string>
+    <string name="car_bluetooth_none">No paired devices. Pair the phone with the car\'s Bluetooth in Android\'s settings first.</string>
+    <string name="car_bluetooth_linked">Linked to %1$s</string>
+    <string name="car_bluetooth_unlink">Unlink</string>
     <string name="car_vin">VIN: %1$s</string>
     <string name="unknown_car_title">New car found</string>
     <string name="unknown_car_vin">This car\'s VIN is %1$s.</string>

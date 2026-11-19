@@ -105,6 +105,14 @@
     <string name="car_notice_new">حُفظت سيارة جديدة: %1$s</string>
     <string name="car_notice_recognized">تم التعرف على: %1$s</string>
     <string name="car_notice_saved">حُفظ في %1$s</string>
+    <string name="car_notice_bluetooth">تم التعرف عليها من البلوتوث: %1$s</string>
+    <string name="section_car_bluetooth">بلوتوث السيارة</string>
+    <string name="car_bluetooth_hint">لسيارة بلا OBD-II ولا Android Auto: اربط بلوتوث السيارة نفسها، مثل نظام الصوت فيها، فينتقل زخم إلى هذه السيارة كلما اتصل الهاتف به.</string>
+    <string name="car_bluetooth_choose">اختر بلوتوث السيارة من الأجهزة المقترنة بهذا الهاتف:</string>
+    <string name="car_bluetooth_off">البلوتوث مغلق، فلا يمكن عرض الأجهزة المقترنة بالهاتف.</string>
+    <string name="car_bluetooth_none">لا توجد أجهزة مقترنة. اقرن الهاتف ببلوتوث السيارة من إعدادات أندرويد أولًا.</string>
+    <string name="car_bluetooth_linked">مرتبطة بـ %1$s</string>
+    <string name="car_bluetooth_unlink">إلغاء الربط</string>
     <string name="car_vin">رقم الهيكل: %1$s</string>
     <string name="unknown_car_title">تم العثور على سيارة جديدة</string>
     <string name="unknown_car_vin">رقم هيكل هذه السيارة هو %1$s.</string>

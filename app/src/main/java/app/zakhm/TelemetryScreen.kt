@@ -149,6 +149,10 @@ data class ScreenSettings(
     /** What the G circle's outer ring stands for, in G. Smaller zooms in. */
     val gRange: Double = DEFAULT_G_RANGE,
     val gStyle: GStyle = GStyle.CIRCLE,
+    /** The devices paired with this phone, to choose a car's own Bluetooth from. */
+    val pairedDevices: List<ObdDevice> = emptyList(),
+    /** Bluetooth is off, so Android lists no paired devices. */
+    val bluetoothOff: Boolean = false,
 )
 
 /** The zoom choices for the G circle; road cars rarely pass 1 G. */
@@ -183,6 +187,8 @@ class ScreenActions(
     val setGView: (GView) -> Unit = {},
     val setGRange: (Double) -> Unit = {},
     val setGStyle: (GStyle) -> Unit = {},
+    val linkCarBluetooth: (address: String, name: String) -> Unit = { _, _ -> },
+    val unlinkCarBluetooth: () -> Unit = {},
     val shareTrip: (SavedTrip, TripFormat) -> Unit = { _, _ -> },
     val deleteTrip: (SavedTrip) -> Unit = {},
     val openTrip: (SavedTrip) -> Unit = {},
@@ -1266,6 +1272,7 @@ private fun ColumnScope.SettingsPage(group: SettingsGroup, state: TelemetryUiSta
         }
         SettingsGroup.CAR -> {
             SettingsSection(R.string.section_cars, carHint(state)) { CarSettings(state, actions) }
+            SettingsSection(R.string.section_car_bluetooth, stringResource(R.string.car_bluetooth_hint)) { CarBluetoothSettings(state, settings, actions) }
             SettingsSection(R.string.section_theme, stringResource(R.string.theme_hint)) {
                 ThemeSettings(state.cars.firstOrNull { it.id == state.activeCarId }?.theme ?: CarTheme.DEFAULT, withHeading = false, onChange = actions.setTheme)
             }
@@ -1341,6 +1348,36 @@ private fun ColumnScope.SettingsPage(group: SettingsGroup, state: TelemetryUiSta
                 CompactButton(stringResource(R.string.tool_reset_peaks), actions.resetPeaks, Modifier.weight(1f))
             }
         }
+    }
+}
+
+/** Links the car's own Bluetooth, or shows the one linked, so the car is recognised without OBD or Android Auto. */
+@Composable
+private fun CarBluetoothSettings(state: TelemetryUiState, settings: ScreenSettings, actions: ScreenActions) {
+    val active = state.cars.firstOrNull { it.id == state.activeCarId } ?: return
+    val linked = active.bluetoothAddress
+    if (linked != null) {
+        Text(stringResource(R.string.car_bluetooth_linked, active.bluetoothName ?: linked), color = Primary, fontSize = DashType.Body)
+        CompactButton(stringResource(R.string.car_bluetooth_unlink), actions.unlinkCarBluetooth, Modifier.fillMaxWidth())
+        return
+    }
+    if (settings.needsBluetoothPermission) {
+        Hint(stringResource(R.string.obd_needs_permission))
+        CompactButton(stringResource(R.string.obd_allow_bluetooth), actions.requestBluetooth, Modifier.fillMaxWidth())
+        return
+    }
+    if (settings.bluetoothOff) {
+        Hint(stringResource(R.string.car_bluetooth_off))
+        CompactButton(stringResource(R.string.obd_turn_on_bluetooth), actions.enableBluetooth, Modifier.fillMaxWidth())
+        return
+    }
+    if (settings.pairedDevices.isEmpty()) {
+        Hint(stringResource(R.string.car_bluetooth_none))
+        return
+    }
+    Hint(stringResource(R.string.car_bluetooth_choose))
+    settings.pairedDevices.forEach { device ->
+        ChoiceChip(device.name, false, Modifier.fillMaxWidth()) { actions.linkCarBluetooth(device.address, device.name) }
     }
 }
 

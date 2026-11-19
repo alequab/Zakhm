@@ -1,8 +1,13 @@
 package app.zakhm
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -16,6 +21,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import app.zakhm.car.AndroidAutoSpeed
 import app.zakhm.core.CarIdentity
 import app.zakhm.core.CarProfile
@@ -32,8 +39,6 @@ import app.zakhm.core.TelemetrySnapshot
 import app.zakhm.core.TripFile
 import app.zakhm.core.TripRecorder
 import app.zakhm.core.Vec3
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileOutputStream
@@ -43,6 +48,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import java.util.zip.GZIPOutputStream
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 data class TelemetryUiState(
     val snapshot: TelemetrySnapshot = TelemetrySnapshot(),
@@ -220,6 +227,7 @@ class TelemetryController(private val context: Context) {
         AndroidAutoSpeed.listener = { speed -> handler.post { onAndroidAutoSpeed(speed) } }
         AndroidAutoSpeed.identityListener = { car -> handler.post { onCarIdentified(car, viaObd = false) } }
         AndroidAutoSpeed.identity?.let { onCarIdentified(it, viaObd = false) }
+        listenForCarBluetooth()
         startObdIfSelected()
         handler.post(publisher)
     }
@@ -232,6 +240,7 @@ class TelemetryController(private val context: Context) {
         locationManager.unregisterGnssStatusCallback(gnssCallback)
         AndroidAutoSpeed.listener = null
         AndroidAutoSpeed.identityListener = null
+        stopListeningForCarBluetooth()
         stopObd()
         handler.removeCallbacks(publisher)
         satellitesUsed = null
@@ -443,6 +452,82 @@ class TelemetryController(private val context: Context) {
         unknownCar?.let { skippedCars += it.key }
         unknownCar = null
         publish()
+    }
+
+    /** Links the car's own Bluetooth (its stereo) to the car in use, so connecting to it brings this car back. */
+    fun linkCarBluetooth(address: String, name: String) = handler.post {
+        cars.linkBluetooth(address, name)
+        saveCars()
+        publish()
+    }
+
+    fun unlinkCarBluetooth() = handler.post {
+        cars.unlinkBluetooth()
+        saveCars()
+        publish()
+    }
+
+    private val carBluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+            handler.post { onCarBluetoothConnected(device.address) }
+        }
+    }
+
+    /**
+     * Watches for the phone connecting to a car's Bluetooth, for cars with neither OBD nor
+     * Android Auto, and checks the devices it's already connected to as the app starts.
+     */
+    private fun listenForCarBluetooth() {
+        ContextCompat.registerReceiver(
+            context,
+            carBluetoothReceiver,
+            IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED),
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
+        // A car's stereo connects for calls (headset) or music (A2DP), or both.
+        for (profile in listOf(BluetoothProfile.HEADSET, BluetoothProfile.A2DP)) {
+            try {
+                adapter.getProfileProxy(
+                    context,
+                    object : BluetoothProfile.ServiceListener {
+                        override fun onServiceConnected(kind: Int, proxy: BluetoothProfile) {
+                            val connected = try {
+                                proxy.connectedDevices.map { it.address }
+                            } catch (_: SecurityException) {
+                                emptyList()
+                            }
+                            adapter.closeProfileProxy(kind, proxy)
+                            handler.post { connected.forEach(::onCarBluetoothConnected) }
+                        }
+
+                        override fun onServiceDisconnected(kind: Int) = Unit
+                    },
+                    profile,
+                )
+            } catch (_: SecurityException) {
+                // Without Bluetooth permission there's nothing to check; linking asks for it.
+            }
+        }
+    }
+
+    private fun stopListeningForCarBluetooth() {
+        try {
+            context.unregisterReceiver(carBluetoothReceiver)
+        } catch (_: IllegalArgumentException) {
+            // It wasn't registered.
+        }
+    }
+
+    /** The phone connected to a Bluetooth device. If a saved car is linked to it, that's the car in use. */
+    private fun onCarBluetoothConnected(address: String) {
+        if (!running || cars.active.bluetoothAddress.equals(address, ignoreCase = true)) return
+        if (cars.cars.none { it.bluetoothAddress.equals(address, ignoreCase = true) }) return
+        captureActiveCar()
+        val before = cars.active
+        cars.selectByBluetooth(address)
+        finishIdentifying(before, viaObd = false, R.string.car_notice_bluetooth)
     }
 
     private fun finishIdentifying(before: CarProfile, viaObd: Boolean, noticeText: Int) {

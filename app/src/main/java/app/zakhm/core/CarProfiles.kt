@@ -42,6 +42,10 @@ data class CarProfile(
     val peaks: Peaks = Peaks(),
     val theme: CarTheme = CarTheme.DEFAULT,
     val learned: LearnedCar = LearnedCar(),
+    /** The car's own Bluetooth (its stereo), which recognises it when the phone connects, without OBD or Android Auto. */
+    val bluetoothAddress: String? = null,
+    /** That Bluetooth device's name, to show while it's out of range. */
+    val bluetoothName: String? = null,
 )
 
 /** The saved cars and which one is in use. There is always at least one. */
@@ -92,6 +96,23 @@ class CarRegistry(
         val i = saved.indexOfFirst { it.id == activeCarId }
         saved[i] = change(saved[i]).copy(id = activeCarId)
     }
+
+    /** Makes the car linked to this Bluetooth device active. Null if no car is linked to it. */
+    fun selectByBluetooth(address: String): CarProfile? {
+        val car = saved.firstOrNull { it.bluetoothAddress.equals(address, ignoreCase = true) } ?: return null
+        activeCarId = car.id
+        return car
+    }
+
+    /** Links a Bluetooth device to the active car. A device belongs to one car, so any other link to it goes. */
+    fun linkBluetooth(address: String, name: String) {
+        for (i in saved.indices) {
+            if (saved[i].bluetoothAddress.equals(address, ignoreCase = true)) saved[i] = saved[i].copy(bluetoothAddress = null, bluetoothName = null)
+        }
+        updateActive { it.copy(bluetoothAddress = address, bluetoothName = name) }
+    }
+
+    fun unlinkBluetooth() = updateActive { it.copy(bluetoothAddress = null, bluetoothName = null) }
 
     /** Makes the car saved with [identity] active. Null if no saved car has it, which is the user's call. */
     fun selectKnown(identity: CarIdentity): CarProfile? {
@@ -173,6 +194,8 @@ object CarProfileJson {
             .put("themePanel", car.theme.panel)
         car.identityKey?.let { json.put("identityKey", it) }
         car.obdAddress?.let { json.put("obdAddress", it) }
+        car.bluetoothAddress?.let { json.put("bluetoothAddress", it) }
+        car.bluetoothName?.let { json.put("bluetoothName", it) }
         car.mount?.let { mount ->
             json.put("mountUp", encodeVector(mount.up))
             mount.forward?.let { json.put("mountForward", encodeVector(it)) }
@@ -216,6 +239,8 @@ object CarProfileJson {
         identityKey = json.optString("identityKey").ifEmpty { null },
         input = SpeedInput.valueOf(json.getString("input")),
         obdAddress = json.optString("obdAddress").ifEmpty { null },
+        bluetoothAddress = json.optString("bluetoothAddress").ifEmpty { null },
+        bluetoothName = json.optString("bluetoothName").ifEmpty { null },
         mount = json.optJSONArray("mountUp")?.let { up ->
             MountCalibration(decodeVector(up), json.optJSONArray("mountForward")?.let(::decodeVector))
         },

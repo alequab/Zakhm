@@ -154,11 +154,31 @@ class CarProfilesTest {
         val cars = listOf(
             CarProfile("a", "Corolla", "vin:$vin", SpeedInput.OBD, "AA:BB", mount, Peaks(0.3, 0.5, 0.4, 0.6)),
             CarProfile("b", "Truck عربية", null, SpeedInput.ANDROID_AUTO, null, MountCalibration(Vec3(0.0, 0.0, 1.0), null)),
-            CarProfile("c", "New"),
+            CarProfile("c", "New", bluetoothAddress = "11:22:33:44:55:66", bluetoothName = "CAR MULTIMEDIA"),
         )
         val loaded = CarProfileJson.decode(CarProfileJson.encode(cars, "b"))!!
         assertEquals(cars, loaded.cars)
         assertEquals("b", loaded.activeId)
+    }
+
+    @Test
+    fun aCarIsRecognisedByItsLinkedBluetooth() {
+        val cars = registry(listOf(CarProfile("a", "Picanto"), CarProfile("b", "Sorento")), active = "a")
+        cars.select("b")
+        cars.linkBluetooth("AA:BB:CC:DD:EE:FF", "Sorento stereo")
+        cars.select("a")
+        // Connecting to the Sorento's stereo makes the Sorento the car in use.
+        assertEquals("b", cars.selectByBluetooth("aa:bb:cc:dd:ee:ff")?.id)
+        assertEquals("b", cars.active.id)
+        assertNull(cars.selectByBluetooth("00:00:00:00:00:00"))
+        // A device belongs to one car: linking it to the Picanto takes it from the Sorento.
+        cars.select("a")
+        cars.linkBluetooth("AA:BB:CC:DD:EE:FF", "Sorento stereo")
+        assertNull(cars.cars.first { it.id == "b" }.bluetoothAddress)
+        assertEquals("AA:BB:CC:DD:EE:FF", cars.active.bluetoothAddress)
+        cars.unlinkBluetooth()
+        assertNull(cars.active.bluetoothAddress)
+        assertNull(cars.active.bluetoothName)
     }
 
     @Test

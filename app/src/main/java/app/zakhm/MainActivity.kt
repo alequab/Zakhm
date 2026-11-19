@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
     /** True from the moment the phone is picked up until it has been left alone a while. */
     private var heldInHand = false
     private var pairedDevices by mutableStateOf(emptyList<ObdDevice>())
+    private var bluetoothOff by mutableStateOf(false)
     private var scannedDevices by mutableStateOf(emptyList<ObdDevice>())
     private var scanning by mutableStateOf(false)
     private var needsBluetoothPermission by mutableStateOf(false)
@@ -197,7 +198,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             // The dashboard redraws many times a second, and none of this changes with it.
-            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage, gView, gRange, gStyle) {
+            val settings = remember(useMph, rotation, pairedDevices, scannedDevices, scanning, needsBluetoothPermission, chosenLanguage, gView, gRange, gStyle, bluetoothOff) {
                 ScreenSettings(
                     useMph = useMph,
                     rotation = rotation,
@@ -208,6 +209,8 @@ class MainActivity : ComponentActivity() {
                     gView = gView,
                     gRange = gRange,
                     gStyle = gStyle,
+                    pairedDevices = pairedDevices,
+                    bluetoothOff = bluetoothOff,
                 )
             }
             TelemetryScreen(state, update, hasPermission, settings, actions)
@@ -244,6 +247,8 @@ class MainActivity : ComponentActivity() {
             setGView = ::setGViewMode,
             setGRange = ::setGRangeChoice,
             setGStyle = ::setGStyleChoice,
+            linkCarBluetooth = { address, name -> controller.linkCarBluetooth(address, name) },
+            unlinkCarBluetooth = { controller.unlinkCarBluetooth() },
             shareTrip = ::shareTrip,
             openTrip = ::openTrip,
             deleteTrip = { controller.deleteTrip(it) },
@@ -254,6 +259,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(Updater.EXTRA_SHOW_UPDATE, false)) viewModel.checkForUpdate()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from Android's "turn on Bluetooth" dialog or its settings, the paired list may have changed.
+        refreshObdDevices()
     }
 
     override fun onStart() {
@@ -329,6 +340,8 @@ class MainActivity : ComponentActivity() {
             pairedDevices = emptyList()
             return
         }
+        // Android lists no paired devices while Bluetooth is off, so the screen says why.
+        bluetoothOff = getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == false
         val bonded = getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
         pairedDevices = bonded.map { ObdDevice(it.name ?: it.address, it.address) }.sortedBy { it.name }
     }
