@@ -18,6 +18,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -25,7 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -187,7 +193,19 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
     val total = s.totalG ?: 0.0
     // The same way round as the circle: the car's movement, or the push felt in the seat.
     val sign = if (view == GView.DRIVER) -1.0 else 1.0
-    val ringColors = listOf(colors.accent, colors.primary, colors.alert)
+    // The display's own colours: cyan, then white, then red. White stays dark on a light theme, to show.
+    val ringColors = listOf(WINDOW_CYAN, if (colors.isLight) colors.primary else WINDOW_WHITE, WINDOW_RED)
+    // As on the display, the number and its box flash red for a moment when the push first
+    // reaches its hardest, then go back to white while the red band stays lit.
+    val hot = litBandCount(s, range) == LIT_FRAMES
+    var flash by remember { mutableStateOf(false) }
+    LaunchedEffect(hot) {
+        flash = hot
+        if (hot) {
+            delay(HOT_FLASH_MS)
+            flash = false
+        }
+    }
     // Left and right are the car's real directions, so they never mirror for Arabic.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         BoxWithConstraints(modifier.panel().padding(12.dp), contentAlignment = Alignment.Center) {
@@ -200,8 +218,9 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
                 Canvas(Modifier.fillMaxSize()) {
                     val gap = size.height * FRAME_GAP_SHARE
                     val line = 2.dp.toPx()
-                    fun frame(i: Int): Path {
-                        // Frame 0 is the outermost; the number sits inside the last one.
+                    fun frame(i: Float): Path {
+                        // Frame 0 is the outermost; the number sits inside the last one. Halfway
+                        // numbers give the line midway between two frames.
                         val inset = gap * i + line
                         val w = size.width - 2 * inset
                         val h = size.height - 2 * inset
@@ -214,32 +233,65 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
                             )
                         }
                     }
-                    for (i in 0 until FRAME_COUNT) drawPath(frame(i), colors.track, style = Stroke(line))
+                    for (i in 0 until FRAME_COUNT) drawPath(frame(i.toFloat()), colors.track, style = Stroke(line))
 
-                    if (long != null && lat != null && total >= DIRECTION_MIN_G) {
-                        // The way of the push on screen, as on the circle: x right, y down.
-                        val x = (-sign * lat).toFloat()
-                        val y = (-sign * long).toFloat()
-                        // (The angle is taken on the G values; each frame's point is found in the same
-                        // stretched terms, so a push at the top lights the top whatever the frames' shape.)
-                        val angle = kotlin.math.atan2(y, x)
-                        val strength = share(total, range)
-                        // Longer as the push grows, as in a hard corner the light spreads along the side.
-                        val spread = MARK_MIN_SHARE + (MARK_MAX_SHARE - MARK_MIN_SHARE) * strength
-                        // The frames light from the number outward: the inner one at once, the others as the push grows.
-                        for (ring in 0 until LIT_FRAMES) {
-                            if (strength < ring.toFloat() / LIT_FRAMES) continue
-                            val lit = litStretch(frame(FRAME_COUNT - 2 - ring), angle, spread)
-                            val color = ringColors[ring]
-                            // A soft glow along the same stretch, then the light itself, both with round ends.
-                            drawPath(lit, color.copy(alpha = 0.16f), style = Stroke(gap * 0.85f, cap = StrokeCap.Round))
-                            drawPath(lit, color, style = Stroke(gap * 0.42f, cap = StrokeCap.Round))
+                    val strength = share(total, range)
+                    // How many bands light: the inner one at once, the others as the push grows.
+                    val litBands = litBandCount(s, range)
+                    if (litBands > 0) {
+                        // As on a race car's onboard display, the bands light in one of eight places
+                        // around the number, the way of the push: a side, the top or bottom, or a
+                        // corner between. On screen, as on the circle: x right, y down.
+                        val angle = kotlin.math.atan2(-sign * long!!, -sign * lat!!)
+                        val quarter = kotlin.math.PI / 2
+                        val axis = kotlin.math.round(angle / quarter) * quarter
+                        // More than half way between two sides: a corner.
+                        val corner = if (kotlin.math.abs(angle - axis) > CORNER_DEGREES * kotlin.math.PI / 180) {
+                            Offset(kotlin.math.sign(kotlin.math.cos(angle)).toFloat(), kotlin.math.sign(kotlin.math.sin(angle)).toFloat())
+                        } else {
+                            null
+                        }
+                        val dx = kotlin.math.round(kotlin.math.cos(axis)).toFloat()
+                        val dy = kotlin.math.round(kotlin.math.sin(axis)).toFloat()
+                        // Toward a side, a block cut straight across, wider as the push grows:
+                        // the same cut through every band, so together they read as one block of stripes.
+                        val sideways = dx != 0f
+                        val minHalf = if (sideways) SIDE_MIN_HALF else TOP_MIN_HALF
+                        val maxHalf = if (sideways) SIDE_MAX_HALF else TOP_MAX_HALF
+                        val half = minHalf + (maxHalf - minHalf) * strength
+                        val side = if (sideways) {
+                            val x = center.x + dx * size.width
+                            androidx.compose.ui.geometry.Rect(minOf(center.x, x), center.y - half * size.height / 2, maxOf(center.x, x), center.y + half * size.height / 2)
+                        } else {
+                            val y = center.y + dy * size.height
+                            androidx.compose.ui.geometry.Rect(center.x - half * size.width / 2, minOf(center.y, y), center.x + half * size.width / 2, maxOf(center.y, y))
+                        }
+                        for (ring in 0 until litBands) {
+                            val band = FRAME_COUNT - 1.5f - ring
+                            // Toward a corner, just each band's rounded corner piece.
+                            val area = corner?.let { (sx, sy) ->
+                                val inset = gap * band + line
+                                val halfWidth = size.width / 2 - inset
+                                val halfHeight = size.height / 2 - inset
+                                val radius = 2 * halfHeight * FRAME_CORNER_SHARE
+                                val x1 = center.x + sx * (halfWidth - radius)
+                                val x2 = center.x + sx * (halfWidth + gap)
+                                val y1 = center.y + sy * (halfHeight - radius)
+                                val y2 = center.y + sy * (halfHeight + gap)
+                                androidx.compose.ui.geometry.Rect(minOf(x1, x2), minOf(y1, y2), maxOf(x1, x2), maxOf(y1, y2))
+                            } ?: side
+                            clipRect(area.left, area.top, area.right, area.bottom) {
+                                // A solid band filling the space between two frames: the frame lines
+                                // left showing between the bands divide them.
+                                drawPath(frame(band), ringColors[ring], style = Stroke(gap - line * BAND_DIVIDER_LINES))
+                            }
                         }
                     }
 
                     // The number's own box, the innermost frame filled in.
-                    drawPath(frame(FRAME_COUNT - 1), colors.background)
-                    drawPath(frame(FRAME_COUNT - 1), colors.secondary.copy(alpha = 0.6f), style = Stroke(line))
+                    drawPath(frame(FRAME_COUNT - 1f), colors.background)
+                    if (flash) drawPath(frame(FRAME_COUNT - 1f), WINDOW_RED.copy(alpha = HOT_BOX_ALPHA))
+                    drawPath(frame(FRAME_COUNT - 1f), if (flash) WINDOW_RED else colors.secondary.copy(alpha = 0.6f), style = Stroke(line))
                 }
                 if (waiting != null) {
                     // Inside the number's box, wrapping onto two lines rather than running past its frames.
@@ -251,7 +303,7 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
                             gText(s.totalG),
-                            color = colors.primary,
+                            color = if (flash) WINDOW_RED else colors.primary,
                             fontSize = (height.value * WINDOW_NUMBER_SHARE).sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -276,59 +328,39 @@ private const val FRAMES_MAX_ASPECT = 2.1f
 private const val FRAME_GAP_SHARE = 0.11f
 private const val FRAME_CORNER_SHARE = 0.32f
 
-/** How much of a frame's length lights: a light push, and a push at the top of the range. */
-private const val MARK_MIN_SHARE = 0.11f
-private const val MARK_MAX_SHARE = 0.28f
+/**
+ * Half a lit block's width across the push, against half the frames' height (for a side) or
+ * width (for the top or bottom): for a light push and one at the top of the range. Hard
+ * braking lights most of the top, as on the display.
+ */
+private const val SIDE_MIN_HALF = 0.22f
+private const val SIDE_MAX_HALF = 0.36f
+private const val TOP_MIN_HALF = 0.25f
+private const val TOP_MAX_HALF = 0.55f
 
-/** Points tried along a frame when finding where the push points. */
-private const val FRAME_SAMPLES = 96
+/** The display's colours: the bands light cyan, then white, then red. */
+private val WINDOW_CYAN = Color(0xFF35CCF2)
+private val WINDOW_WHITE = Color(0xFFF4F6F8)
+private val WINDOW_RED = Color(0xFFFF3B30)
+
+/** How far, in degrees, a push may lean off straight to a side before only the corner lights. */
+private const val CORNER_DEGREES = 22.5
+
+/** How long the number and its box flash red when the push first reaches its hardest. */
+private const val HOT_FLASH_MS = 1_200L
+
+/** How strongly the number's box glows red while it flashes. */
+private const val HOT_BOX_ALPHA = 0.22f
+
+/** How many of the Window's bands a push lights: the inner one at once, the others as it grows. */
+private fun litBandCount(s: TelemetrySnapshot, range: Double): Int {
+    val total = s.totalG ?: return 0
+    if (s.longitudinalG == null || s.lateralG == null || total < DIRECTION_MIN_G) return 0
+    val strength = share(total, range)
+    return (0 until LIT_FRAMES).count { strength >= it.toFloat() / LIT_FRAMES }
+}
 private const val WINDOW_NUMBER_SHARE = 0.2f
 
-/**
- * The stretch of [frame] centred where it lies in the direction [angle] (radians, x right, y down,
- * in the frame's own stretched terms), [share] of its length long. Drawn as a piece of the frame
- * itself, so its ends are round and follow the frame rather than being cut off straight.
- */
-private fun litStretch(frame: Path, angle: Float, share: Float): Path {
-    val measure = PathMeasure().apply { setPath(frame, true) }
-    val length = measure.length
-    val bounds = frame.getBounds()
-    var best = 0f
-    var bestGap = Float.MAX_VALUE
-    for (i in 0 until FRAME_SAMPLES) {
-        val at = length * i / FRAME_SAMPLES
-        val p = measure.getPosition(at)
-        val a = kotlin.math.atan2((p.y - bounds.center.y) / bounds.height, (p.x - bounds.center.x) / bounds.width)
-        val gap = kotlin.math.abs(wrapAngle(a - angle))
-        if (gap < bestGap) {
-            bestGap = gap
-            best = at
-        }
-    }
-    val half = length * share / 2
-    val start = best - half
-    val end = best + half
-    return Path().also { out ->
-        // The frame's start point may fall inside the stretch, so it can come in two pieces.
-        when {
-            start < 0f -> {
-                measure.getSegment(length + start, length, out, true)
-                measure.getSegment(0f, end, out, false)
-            }
-            end > length -> {
-                measure.getSegment(start, length, out, true)
-                measure.getSegment(0f, end - length, out, false)
-            }
-            else -> measure.getSegment(start, end, out, true)
-        }
-    }
-}
+/** The dark gap kept between two lit bands, in frame-line widths, so each band stands apart. */
+private const val BAND_DIVIDER_LINES = 3f
 
-/** An angle difference brought into -π..π. */
-private fun wrapAngle(a: Float): Float {
-    val turn = (2 * Math.PI).toFloat()
-    var r = a % turn
-    if (r > Math.PI) r -= turn
-    if (r < -Math.PI) r += turn
-    return r
-}

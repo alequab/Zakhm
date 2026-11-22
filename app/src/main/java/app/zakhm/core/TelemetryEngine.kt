@@ -97,8 +97,23 @@ class TelemetryEngine {
     private var gravityMagnitude = STANDARD_GRAVITY
     private var calmForce: Vec3? = null
     private var calmGyro = Vec3.ZERO
-    private var cruisingForce = Vec3.ZERO
-    private var cruisingSamples = 0
+
+    /** One stretch between two speed readings. */
+    private class StraightPiece(
+        val seconds: Double,
+        val forceTimesSeconds: Vec3,
+        val turnTimesSeconds: Vec3,
+        val startSpeed: Double,
+        val endSpeed: Double,
+    )
+
+    /** "Down" measured at the current stop: the last moments kept apart, as they may be pulling away. */
+    private val stopRecent = ArrayDeque<Pair<Double, Vec3>>()
+    private var stopSettledSum = Vec3.ZERO
+    private var stopSettledSeconds = 0.0
+
+    /** The latest unbroken run of driving, oldest first, to find gravity in. */
+    private val straightRun = ArrayDeque<StraightPiece>()
 
     private var mountUp: Vec3? = null
     private var forward: Vec3? = null
@@ -221,8 +236,7 @@ class TelemetryEngine {
             peaksBeforeMismatch = olderPeaks
             peakSignal = null
             smoothedAccel = null
-            cruisingForce = Vec3.ZERO
-            cruisingSamples = 0
+            straightRun.clear()
         }
         if (inHand && !settling) {
             // Put back the same way, the calibration still fits. Turned, it has to be learned again.
@@ -452,6 +466,15 @@ class TelemetryEngine {
     }
 
     private fun checkStopped(time: Double) {
+        val wasStopped = stopped
+        try {
+            decideStopped(time)
+        } finally {
+            if (wasStopped && !stopped) settleMountAfterStop()
+        }
+    }
+
+    private fun decideStopped(time: Double) {
         val w = history.window(time - STOP_WINDOW_SECONDS, time)
         if (w == null || w.spanSeconds < STOP_WINDOW_SECONDS * 0.8) {
             stopped = false
@@ -494,7 +517,7 @@ class TelemetryEngine {
         val gyroLimit = (if (gpsFresh) STOP_GYRO_STD else STOP_GYRO_STD_NO_GPS) * hold
         val turning = (w.meanGyro - gyroBias).norm
         stopped = w.forceStd < forceLimit && w.gyroStd < gyroLimit && turning < STOP_GYRO_MEAN * hold
-        if (stopped) onStopped(w)
+        if (stopped) onStopped(time, w)
     }
 
     /**
@@ -608,7 +631,7 @@ class TelemetryEngine {
                 gpsTrust.sampleCount,
             )
 
-    private fun onStopped(w: WindowStats) {
+    private fun onStopped(time: Double, w: WindowStats) {
         val measuredUp = w.meanForce.normalized()
         gravityMagnitude += (w.meanForce.norm - gravityMagnitude) * STOPPED_BLEND
         gyroBias += (w.meanGyro - gyroBias) * STOPPED_BLEND
@@ -623,8 +646,35 @@ class TelemetryEngine {
             gravityUp = measuredUp
         } else {
             gravityUp = (gravityUp!! + (measuredUp - gravityUp!!) * STOPPED_BLEND).normalized()
+            // Kept for when the stop ends; see settleMountAfterStop.
+            stopRecent.addLast(time to measuredUp)
+            while (stopRecent.first().first < time - STOP_END_DISCARD_SECONDS) {
+                stopSettledSum += stopRecent.removeFirst().second * STOP_CHECK_INTERVAL
+                stopSettledSeconds += STOP_CHECK_INTERVAL
+            }
         }
         speedFilter.updateStopped()
+    }
+
+    /**
+     * A phone put back a little differently, or a saved car's angle from another day: the
+     * car's axes settle on what the stop measured, forward turning with "down", rather than
+     * staying off by up to the 20 degrees that count as moved for the whole drive. The
+     * stop's last moments are left out, as the car may already be pulling away before its
+     * speed shows it, and a longer stop counts for more than a short one.
+     */
+    private fun settleMountAfterStop() {
+        val up = mountUp
+        val seconds = stopSettledSeconds
+        val measured = stopSettledSum.normalized()
+        stopRecent.clear()
+        stopSettledSum = Vec3.ZERO
+        stopSettledSeconds = 0.0
+        if (up == null || seconds <= 0.0 || angleBetween(up, measured) > MOUNT_MOVED_RADIANS) return
+        val weight = min(seconds / STOP_SETTLE_SECONDS, 1.0)
+        val settled = (up + (measured - up) * weight).normalized()
+        forward = forward?.let { rotateWith(it, up, settled) }
+        mountUp = settled
     }
 
     private fun resetMount() {
@@ -635,33 +685,70 @@ class TelemetryEngine {
         anchorTime = Double.NaN
         smoothedAccel = null
         peakSignal = null
-        cruisingForce = Vec3.ZERO
-        cruisingSamples = 0
+        straightRun.clear()
+        stopRecent.clear()
+        stopSettledSum = Vec3.ZERO
+        stopSettledSeconds = 0.0
         mountMismatches = 0
     }
 
     /**
-     * Finds "down" without waiting for a stop. At a steady speed in a straight line
-     * the only lasting force is gravity, so averaging a few intervals gives its direction.
+     * The direction of gravity from the latest few seconds of driving, or null.
+     *
+     * Over any stretch the car's average push along its length is exactly its change of
+     * speed divided by the time, whatever happened in between, so speeding up and braking
+     * cancel out and the speed readings say how much is left. Likewise its average push
+     * across is the speed times its overall change of heading, which the gyroscope gives,
+     * so a bend one way and then the other cancel too. The average force over a stretch
+     * whose speed and heading changed little overall is therefore gravity, to about a
+     * degree, without waiting for a stop or a steady straight road (which whole-km/h car
+     * readings rarely show from one second to the next anyway).
      */
-    private fun learnUpWhileCruising(w: WindowStats, speedChangeRate: Double, averageSpeed: Double) {
-        // Roads rarely stay straight and level for long, so an unsteady moment is skipped, not a reason to start over.
-        val steady = averageSpeed >= MIN_LEARNING_SPEED &&
-            abs(speedChangeRate) < MAX_CRUISING_RATE &&
-            (w.meanGyro - gyroBias).norm < MAX_CRUISING_TURN
-        if (!steady) return
-        // The steady moments can be far apart, so make sure the phone hasn't moved in between.
-        if (cruisingSamples > 0 && angleBetween(cruisingForce.normalized(), w.meanForce.normalized()) > MAX_CRUISING_SPREAD_RADIANS) {
-            cruisingForce = Vec3.ZERO
-            cruisingSamples = 0
+    private fun straightGravity(w: WindowStats, interval: Double, startSpeed: Double, endSpeed: Double): Vec3? {
+        val averageSpeed = (startSpeed + endSpeed) / 2
+        val turn = w.meanGyro - gyroBias
+        // Too slow to read the speed well, or turning faster than a car does: start again.
+        if (averageSpeed < MIN_LEARNING_SPEED || turn.norm > MAX_RUN_ROTATION) {
+            straightRun.clear()
+            return null
         }
-        cruisingForce += w.meanForce
-        cruisingSamples++
-        if (cruisingSamples >= CRUISING_SAMPLES_NEEDED) {
-            val up = cruisingForce.normalized()
-            mountUp = up
-            gravityUp = up
+        val piece = StraightPiece(interval, w.meanForce * interval, turn * interval, startSpeed, endSpeed)
+        // A phone moved within the stretch would average two angles into neither, so a jump
+        // in angle drops everything before it. Hard cornering tilts the force from the
+        // stretch's average by up to about 30 degrees, so only more than that counts.
+        // The piece that showed the jump may hold some of each angle, so it goes too.
+        if (straightRun.isNotEmpty()) {
+            val runDirection = straightRun.fold(Vec3.ZERO) { sum, p -> sum + p.forceTimesSeconds }.normalized()
+            if (angleBetween(runDirection, w.meanForce.normalized()) > MAX_RUN_JUMP_RADIANS) {
+                straightRun.clear()
+                return null
+            }
         }
+        straightRun.addLast(piece)
+        var total = straightRun.sumOf { it.seconds }
+        while (total > MAX_STRAIGHT_RUN_SECONDS) total -= straightRun.removeFirst().seconds
+
+        // The longest stretch ending now that changed speed and heading little overall: the
+        // longer, the more the road's small bumps and sways average out.
+        var seconds = 0.0
+        var force = Vec3.ZERO
+        var heading = Vec3.ZERO
+        var speedSum = 0.0
+        var best: Vec3? = null
+        for (i in straightRun.indices.reversed()) {
+            val p = straightRun[i]
+            seconds += p.seconds
+            force += p.forceTimesSeconds
+            heading += p.turnTimesSeconds
+            speedSum += (p.startSpeed + p.endSpeed) / 2 * p.seconds
+            if (seconds < MIN_STRAIGHT_RUN_SECONDS) continue
+            val alongPush = abs(endSpeed - p.startSpeed) / seconds
+            val sidePush = speedSum / seconds * heading.norm / seconds
+            if (alongPush <= MAX_STRAIGHT_SPEED_CHANGE_RATE && sidePush <= MAX_STRAIGHT_SIDE_PUSH) best = force * (1.0 / seconds)
+        }
+        val gravity = best ?: return null
+        if (abs(gravity.norm - gravityMagnitude) > MAX_GRAVITY_ERROR) return null
+        return gravity.normalized()
     }
 
     private fun learnFromFix(fixTime: Double, measured: Double) {
@@ -670,18 +757,31 @@ class TelemetryEngine {
         val previousSpeed = anchorSpeed
         anchorTime = fixTime
         anchorSpeed = measured
-        if (previousAnchor.isNaN()) return
         val interval = fixTime - previousAnchor
-        if (interval > MAX_ANCHOR_SPACING) return
+        // A gap breaks the straight run: what happened in it is unknown.
+        if (previousAnchor.isNaN() || interval > MAX_ANCHOR_SPACING) {
+            straightRun.clear()
+            return
+        }
 
         val w = history.window(previousAnchor, fixTime) ?: return
         val speedChangeRate = (measured - previousSpeed) / interval
         val averageSpeed = (measured + previousSpeed) / 2
+        val gravityFromStraight = straightGravity(w, interval, previousSpeed, measured)
         val up = mountUp
         val tracked = gravityUp
         if (up == null || tracked == null) {
-            learnUpWhileCruising(w, speedChangeRate, averageSpeed)
+            gravityFromStraight?.let {
+                mountUp = it
+                gravityUp = it
+            }
             return
+        }
+        // Until forward is known nothing else corrects the gyroscope's slow drift, which
+        // otherwise adds up to a false "the phone was moved" within a few minutes.
+        if (forward == null && gravityFromStraight != null) {
+            val blend = min(interval / GRAVITY_CORRECTION_SECONDS, 1.0)
+            gravityUp = (tracked + (gravityFromStraight - tracked) * blend).normalized()
         }
         if (averageSpeed < MIN_LEARNING_SPEED) return
         val yawRate = (w.meanGyro - gyroBias) dot up
@@ -705,6 +805,17 @@ class TelemetryEngine {
     }
 
     private fun angleBetween(a: Vec3, b: Vec3) = acos((a dot b).coerceIn(-1.0, 1.0))
+
+    /** [v] turned by the smallest rotation that takes unit vector [from] to [to]. */
+    private fun rotateWith(v: Vec3, from: Vec3, to: Vec3): Vec3 {
+        val axis = from cross to
+        val sin = axis.norm
+        if (sin < 1e-9) return v
+        val k = axis * (1.0 / sin)
+        val cos = from dot to
+        // Rodrigues' formula.
+        return (v * cos + (k cross v) * sin + k * ((k dot v) * (1 - cos))).normalized()
+    }
 
     private companion object {
         const val MAX_SENSOR_GAP = 0.25
@@ -757,6 +868,12 @@ class TelemetryEngine {
         const val GPS_ROLLING_LEARN_ACCURACY = 1.0
         const val STOPPED_BLEND = 0.2
 
+        /** A stop's last moments, left out of the car's angle: the car may be pulling away already. */
+        const val STOP_END_DISCARD_SECONDS = 1.5
+
+        /** How long a clean stop must be to move the car's angle all the way to what it measured. */
+        const val STOP_SETTLE_SECONDS = 3.0
+
         /** More than any road slope: if gravity has moved this far, the phone was moved. */
         const val MOUNT_MOVED_RADIANS = 20.0 * Math.PI / 180.0
         const val STOP_RELEASE_FACTOR = 1.5
@@ -771,10 +888,23 @@ class TelemetryEngine {
         const val MIN_LEARNING_RATE = 0.3
         const val MAX_LEARNING_YAW_RATE = 0.06
         const val MIN_LEARNING_TURN = 0.5
-        const val MAX_CRUISING_RATE = 0.2
-        const val MAX_CRUISING_TURN = 0.03
         const val MAX_CRUISING_SPREAD_RADIANS = 15.0 * Math.PI / 180.0
-        const val CRUISING_SAMPLES_NEEDED = 5
+
+        /** More than cornering tilts the force from its average (0.7 G is about 35 degrees): the phone moved. */
+        const val MAX_RUN_JUMP_RADIANS = 35.0 * Math.PI / 180.0
+
+        /** Faster than any car turns, rad/s: the phone is being handled. */
+        const val MAX_RUN_ROTATION = 0.6
+
+        /** Average push across the car left over a stretch, m/s²: under a degree of error in "down". */
+        const val MAX_STRAIGHT_SIDE_PUSH = 0.15
+
+        /** Long enough for whole-km/h readings to pin the overall speed change to under 0.1 m/s². */
+        const val MIN_STRAIGHT_RUN_SECONDS = 4.0
+        const val MAX_STRAIGHT_RUN_SECONDS = 20.0
+
+        /** Overall speed change over the stretch, m/s²: what's left of it tilts "down" by under a degree. */
+        const val MAX_STRAIGHT_SPEED_CHANGE_RATE = 0.15
         const val MAX_GRAVITY_ERROR = 1.0
         const val GRAVITY_CORRECTION_SECONDS = 8.0
     }

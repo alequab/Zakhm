@@ -308,6 +308,18 @@ class ScreenRenderTest {
         save("g-style-window-land")
     }
 
+    /** Each style full screen in landscape: the whole instrument must fit, labels included. */
+    @Test
+    @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")
+    fun gFullScreenLandscapeEachStyle() {
+        var style by mutableStateOf(GStyle.CIRCLE)
+        compose.setContent { TelemetryScreen(state(), UpdateState.None, true, settings.copy(gStyle = style), actions, startFocus = Focus.G) }
+        GStyle.entries.forEach {
+            style = it
+            save("focus-g-land-${it.name.lowercase()}")
+        }
+    }
+
     /** The button hides all but the readings; a touch brings the rest back, and 20 s untouched hides it again. */
     @Test
     @Config(qualifiers = "w851dp-h393dp-land-xxhdpi")

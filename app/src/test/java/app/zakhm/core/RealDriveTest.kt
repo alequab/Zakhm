@@ -65,7 +65,8 @@ class RealDriveTest {
         val moved = DriveSimulator(engine, axes.first, axes.second, axes.third, startSpeed = 16.0, startTime = first.time)
         moved.run(12.0)
         assertNotEquals(CalibrationState.WAITING_FOR_STOP, engine.snapshot().calibration)
-        assertTrue((engine.mountCalibration()!!.up dot axes.third) > 0.995)
+        val dot = engine.mountCalibration()!!.up dot axes.third
+        assertTrue("down mixes both positions, dot=$dot", dot > 0.995)
     }
 
     @Test
