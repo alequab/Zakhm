@@ -197,4 +197,20 @@ class MovedPhoneTest {
         assertTrue(s.totalG == null || s.totalG!!.isFinite())
         assertTrue(s.speedMps == null || s.speedMps!!.isFinite())
     }
+
+    /**
+     * Leaving a parking spot, the car turns slowly while GPS still reads 0. That turn was once
+     * learned as gyroscope bias, which tilted "down" 20 degrees within a minute of driving
+     * and threw the calibration away as if the phone had been moved (real drive, 23 Nov).
+     */
+    @Test
+    fun creepingRoundAtAStopIsNotTakenForGyroscopeBias() {
+        val sim = DriveSimulator(engine)
+        sim.run(4.0)
+        // Speed stays 0, as GPS reports it, while the heading creeps round faster and faster.
+        sim.run(15.0, { t -> CarMotion(yawRate = (0.01 * t).coerceAtMost(0.15)) })
+        sim.run(90.0, ::city)
+        assertEquals("no calibration loss: ${engine.lastCalibrationLoss}", 0, engine.calibrationLosses)
+        assertEquals(CalibrationState.READY, engine.snapshot().calibration)
+    }
 }

@@ -634,7 +634,10 @@ class TelemetryEngine {
     private fun onStopped(time: Double, w: WindowStats) {
         val measuredUp = w.meanForce.normalized()
         gravityMagnitude += (w.meanForce.norm - gravityMagnitude) * STOPPED_BLEND
-        gyroBias += (w.meanGyro - gyroBias) * STOPPED_BLEND
+        // Android's gyroscope is already calibrated, so what's left of its bias is tiny. A bigger
+        // mean is the car creeping round while GPS still reads 0, as when leaving a parking
+        // spot; taken as bias, it tilted "down" 20 degrees within a minute of driving.
+        if (w.meanGyro.norm <= MAX_GYRO_BIAS) gyroBias += (w.meanGyro - gyroBias) * STOPPED_BLEND
 
         val up = mountUp
         if (up == null || angleBetween(up, measuredUp) > MOUNT_MOVED_RADIANS) {
@@ -867,6 +870,9 @@ class TelemetryEngine {
         val GPS_ROLLING_LEARN_RANGE = 4.0..6.0
         const val GPS_ROLLING_LEARN_ACCURACY = 1.0
         const val STOPPED_BLEND = 0.2
+
+        /** rad/s, about half a degree a second: more than a calibrated gyroscope is ever off at rest. */
+        const val MAX_GYRO_BIAS = 0.01
 
         /** A stop's last moments, left out of the car's angle: the car may be pulling away already. */
         const val STOP_END_DISCARD_SECONDS = 1.5
