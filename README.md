@@ -40,7 +40,7 @@
 <table>
 <tr>
 <td width="33%"><img src="docs/images/dashboard-ar.png" alt="لوحة العدادات بالعربية: السرعة 97 كم/س ودائرة قوة G"><p align="center"><b>لوحة العدادات</b></p></td>
-<td width="33%"><img src="docs/images/settings-ar.png" alt="الإعدادات بالعربية ودليل الاستخدام مفتوح"><p align="center"><b>الإعدادات ودليل الاستخدام</b></p></td>
+<td width="33%"><img src="docs/images/settings-ar.png" alt="صفحة الإعدادات بالعربية بمجموعاتها وأيقوناتها"><p align="center"><b>الإعدادات</b></p></td>
 <td width="33%"><img src="docs/images/drives-ar.png" alt="الرحلات المحفوظة مع أزرار الفتح على الخريطة والمشاركة"><p align="center"><b>الرحلات المحفوظة</b></p></td>
 </tr>
 </table>
@@ -52,14 +52,14 @@
 <table>
 <tr>
 <td width="50%" valign="top"><b>السرعة</b><br>بالكيلومتر أو الميل في الساعة، بدمج GPS مع مقياس التسارع لتقليل التأخير.</td>
-<td width="50%" valign="top"><b>مقياس G</b><br>يفصل بين التسارع والفرملة والانعطاف، مع أعلى القيم لكل اتجاه. اعرضه كحركة السيارة أو كما يشعر به السائق، وكبّر الدائرة حتى 0.5 G. اضغط على العداد أو الدائرة لتملأ الشاشة.</td>
+<td width="50%" valign="top"><b>مقياس G</b><br>يفصل بين التسارع والفرملة والانعطاف، مع أعلى القيم لكل اتجاه. اعرضه كحركة السيارة أو كما يشعر به السائق، وكبّر الدائرة حتى 0.5 G. ثلاثة أشكال: دائرة أو حلقة أو نافذة تضيء أشرطتها في جهة الدفع كشاشات سيارات الفورمولا. اضغط على العداد أو الدائرة لتملأ الشاشة.</td>
 </tr>
 <tr>
 <td valign="top"><b>مصدر السرعة</b><br>GPS الهاتف أو محوّل OBD-II أو Android Auto، مع التحول إلى GPS إذا توقف مصدر السيارة.</td>
 <td valign="top"><b>حفظ السيارات</b><br>تحتفظ كل سيارة بمصدر السرعة والمعايرة وأعلى القيم الخاصة بها.</td>
 </tr>
 <tr>
-<td valign="top"><b>التعرف على السيارة</b><br>برقم الهيكل (VIN) عبر OBD-II، أو بالطراز عبر Android Auto. تُحمَّل السيارة المعروفة تلقائيًا، ويسألك التطبيق قبل حفظ سيارة جديدة.</td>
+<td valign="top"><b>التعرف على السيارة</b><br>برقم الهيكل (VIN) عبر OBD-II، أو بالطراز عبر Android Auto، أو بـ Bluetooth السيارة نفسها عند اتصال الهاتف به. ويجرّب التطبيق محوّل كل سيارة محفوظة، فيعرف السيارة من المحوّل الذي يجيب. تُحمَّل السيارة المعروفة تلقائيًا، ويسألك التطبيق قبل حفظ سيارة جديدة.</td>
 <td valign="top"><b>أي زاوية تثبيت</b><br>يحدد التطبيق بنفسه اتجاه الأسفل والأمام، ويصحح أثر المنحدرات.</td>
 </tr>
 <tr>
@@ -83,8 +83,12 @@
 <td valign="top"><b>قطع اتصال OBD-II</b><br>زر في الإعدادات يحرر المحوّل لتطبيق آخر، ثم يعيد الاتصال متى شئت.</td>
 </tr>
 <tr>
-<td valign="top"><b>إعدادات مرتبة</b><br>سبع مجموعات تُفتح واحدة في كل مرة، وتعرض كل مجموعة قيمتها الحالية وهي مغلقة، فتتسع الإعدادات كلها في شاشة واحدة.</td>
+<td valign="top"><b>إعدادات مرتبة</b><br>مجموعات بأيقونات تعرض قيمتها الحالية، وتفتح كل واحدة صفحة كاملة، بعمودين في الوضع الأفقي.</td>
 <td valign="top"><b>دليل الاستخدام</b><br>خمس خطوات قصيرة في أعلى الإعدادات تشرح التثبيت ومصدر السرعة والقيادة وملء الشاشة وحفظ الرحلات.</td>
+</tr>
+<tr>
+<td valign="top"><b>وضع القيادة</b><br>زر المقود في الأعلى: بعد 20 ثانية دون لمس تبقى السرعة وقوة G والحالة وزر التسجيل فقط، ولمسة تعيد الباقي. وزر التسجيل حاضر في اللوحة وفي ملء الشاشة.</td>
+<td valign="top"><b>معايرة أسرع</b><br>يعرف التطبيق اتجاه الأسفل من ثوانٍ قليلة من القيادة دون انتظار توقف، ويثبت على زاوية السيارة المحفوظة عند كل توقف. وعند إيقاف Bluetooth يعرض زرًا لتشغيله وينتظر بهدوء.</td>
 </tr>
 </table>
 
@@ -215,7 +219,7 @@ flowchart LR
 <table>
 <tr>
 <td width="33%"><img src="docs/images/dashboard-en.png" alt="The dashboard: 97 km/h and the G-force circle"><p align="center"><b>Dashboard</b></p></td>
-<td width="33%"><img src="docs/images/settings-en.png" alt="Settings with the how-to guide open"><p align="center"><b>Settings and guide</b></p></td>
+<td width="33%"><img src="docs/images/settings-en.png" alt="The settings page with its groups and icons"><p align="center"><b>Settings</b></p></td>
 <td width="33%"><img src="docs/images/drives-en.png" alt="Saved drives with Open on map and share buttons"><p align="center"><b>Saved drives</b></p></td>
 </tr>
 </table>
@@ -227,14 +231,14 @@ flowchart LR
 <table>
 <tr>
 <td width="50%" valign="top"><b>Speed</b><br>In km/h or mph, combining GPS with the accelerometer to reduce lag.</td>
-<td width="50%" valign="top"><b>G-force meter</b><br>Separates acceleration, braking and cornering, with peak values for each direction. Show it as the car's movement or as felt by the driver, and zoom the circle down to 0.5 G. Tap the gauge or the circle to fill the screen with it.</td>
+<td width="50%" valign="top"><b>G-force meter</b><br>Separates acceleration, braking and cornering, with peak values for each direction. Show it as the car's movement or as felt by the driver, and zoom the circle down to 0.5 G. Three styles: Circle, Ring, or Window, whose bands light on the side of the push like a racing car's onboard display. Tap the gauge or the circle to fill the screen with it.</td>
 </tr>
 <tr>
 <td valign="top"><b>Speed source</b><br>Phone GPS, an OBD-II adapter or Android Auto, switching to GPS if a car source stops.</td>
 <td valign="top"><b>Saved cars</b><br>Each car keeps its own speed source, calibration and peak values.</td>
 </tr>
 <tr>
-<td valign="top"><b>Car recognition</b><br>By VIN over OBD-II, or by model over Android Auto. A known car loads automatically, and the app asks before saving a new one.</td>
+<td valign="top"><b>Car recognition</b><br>By VIN over OBD-II, by model over Android Auto, or by the car's own Bluetooth when the phone connects to it. The app also tries every saved car's adapter and recognises the car whose adapter answers. A known car loads automatically, and the app asks before saving a new one.</td>
 <td valign="top"><b>Any mounting angle</b><br>The app works out which way is down and forward, and corrects for hills.</td>
 </tr>
 <tr>
@@ -258,8 +262,12 @@ flowchart LR
 <td valign="top"><b>Disconnect OBD-II</b><br>A settings button frees the adapter for another app, then connects again when you want.</td>
 </tr>
 <tr>
-<td valign="top"><b>Tidy settings</b><br>Seven groups that open one at a time, each showing its current value while closed, so all of settings fits on one screen.</td>
+<td valign="top"><b>Tidy settings</b><br>Groups with icons that show their current value, each opening a full page, in two columns in landscape.</td>
 <td valign="top"><b>How-to guide</b><br>Five short steps at the top of settings: mounting, speed source, driving, full screen and saving drives.</td>
+</tr>
+<tr>
+<td valign="top"><b>Drive mode</b><br>The steering-wheel button at the top: after 20 seconds untouched only speed, G-force, status and the record button stay, and a touch brings the rest back. The record button is on the dashboard and in full screen.</td>
+<td valign="top"><b>Faster calibration</b><br>The app finds which way is down from a few seconds of driving, without waiting for a stop, and settles a saved car's angle at each stop. With Bluetooth off it shows a button to turn it on and waits quietly.</td>
 </tr>
 </table>
 
