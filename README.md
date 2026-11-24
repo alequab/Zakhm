@@ -52,7 +52,7 @@
 <table>
 <tr>
 <td width="50%" valign="top"><b>السرعة</b><br>بالكيلومتر أو الميل في الساعة، بدمج GPS مع مقياس التسارع لتقليل التأخير.</td>
-<td width="50%" valign="top"><b>مقياس G</b><br>يفصل بين التسارع والفرملة والانعطاف، مع أعلى القيم لكل اتجاه. اعرضه كحركة السيارة أو كما يشعر به السائق، وكبّر الدائرة حتى 0.5 G. ثلاثة أشكال: دائرة أو حلقة أو نافذة تضيء أشرطتها في جهة الدفع كشاشات سيارات الفورمولا. اضغط على العداد أو الدائرة لتملأ الشاشة.</td>
+<td width="50%" valign="top"><b>مقياس G</b><br>يفصل بين التسارع والفرملة والانعطاف، مع أعلى القيم لكل اتجاه. اعرضه كحركة السيارة أو كما يشعر به السائق، وكبّر الدائرة حتى 0.5 G. ثلاثة أشكال: دائرة أو حلقة أو نافذة تضيء أشرطتها في جهة الدفع كشاشات سيارات الفورمولا، ويبقى العرض ثابتًا لا يرمش مع مطبات الطريق. اضغط على العداد أو الدائرة لتملأ الشاشة.</td>
 </tr>
 <tr>
 <td valign="top"><b>مصدر السرعة</b><br>GPS الهاتف أو محوّل OBD-II أو Android Auto، مع التحول إلى GPS إذا توقف مصدر السيارة.</td>
@@ -231,7 +231,7 @@ flowchart LR
 <table>
 <tr>
 <td width="50%" valign="top"><b>Speed</b><br>In km/h or mph, combining GPS with the accelerometer to reduce lag.</td>
-<td width="50%" valign="top"><b>G-force meter</b><br>Separates acceleration, braking and cornering, with peak values for each direction. Show it as the car's movement or as felt by the driver, and zoom the circle down to 0.5 G. Three styles: Circle, Ring, or Window, whose bands light on the side of the push like a racing car's onboard display. Tap the gauge or the circle to fill the screen with it.</td>
+<td width="50%" valign="top"><b>G-force meter</b><br>Separates acceleration, braking and cornering, with peak values for each direction. Show it as the car's movement or as felt by the driver, and zoom the circle down to 0.5 G. Three styles: Circle, Ring, or Window, whose bands light on the side of the push like a racing car's onboard display, and the display stays steady instead of flickering with road bumps. Tap the gauge or the circle to fill the screen with it.</td>
 </tr>
 <tr>
 <td valign="top"><b>Speed source</b><br>Phone GPS, an OBD-II adapter or Android Auto, switching to GPS if a car source stops.</td>
