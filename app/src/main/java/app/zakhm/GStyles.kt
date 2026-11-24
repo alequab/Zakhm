@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.zakhm.core.SteadyPush
 import app.zakhm.core.TelemetrySnapshot
 import java.util.Locale
 import kotlin.math.ceil
@@ -67,13 +68,18 @@ private const val RING_SWEEP_DEGREES = 270f
 /** The number's size against the ring's width. */
 private const val RING_NUMBER_SHARE = 0.2f
 
-/** Under this the car is coasting, so no direction is shown. */
-private const val DIRECTION_MIN_G = 0.05
-
 /** From here the fill turns to the alert colour, as the circle's dot does. */
 private const val HIGH_G = 0.6
 
 private fun gText(value: Double?) = value?.takeIf { it.isFinite() }?.let { "%.2f".format(Locale.US, it) } ?: "--"
+
+/** The meter's steady view of the push, kept across frames; see [SteadyPush]. */
+@Composable
+private fun rememberSteadyPush(s: TelemetrySnapshot, range: Double, bands: Int): SteadyPush {
+    val steady = remember { SteadyPush() }
+    steady.update(System.nanoTime() / 1e9, s.longitudinalG, s.lateralG, range, bands)
+    return steady
+}
 
 private fun share(value: Double, range: Double) = (value / range).coerceIn(0.0, 1.0).toFloat()
 
@@ -99,9 +105,11 @@ private fun Waiting(text: String, size: Int) {
 @Composable
 internal fun GRing(s: TelemetrySnapshot, range: Double, waiting: String?, modifier: Modifier, large: Boolean) {
     val colors = LocalDash.current
-    val long = s.longitudinalG
-    val lat = s.lateralG
-    val total = s.totalG ?: 0.0
+    // Drawn steady; the number shows the reading as it is.
+    val steady = rememberSteadyPush(s, range, 1)
+    val long = steady.long
+    val lat = steady.lat
+    val total = steady.total
     val fill = if (total >= HIGH_G) colors.alert else colors.accent
     // Braking and speeding up are the car's own sides, so the bars never mirror for Arabic.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -114,7 +122,7 @@ internal fun GRing(s: TelemetrySnapshot, range: Double, waiting: String?, modifi
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
-            PedalBar(share(maxOf(0.0, -(long ?: 0.0)), range), colors.alert, R.string.peak_brake, Modifier.width(barWidth).height(ring))
+            PedalBar(share(maxOf(0.0, -long), range), colors.alert, R.string.peak_brake, Modifier.width(barWidth).height(ring))
             Box(Modifier.size(ring), contentAlignment = Alignment.Center) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.fillMaxSize()) {
@@ -130,7 +138,7 @@ internal fun GRing(s: TelemetrySnapshot, range: Double, waiting: String?, modifi
                             drawArc(fill, RING_START_DEGREES, swept, false, topLeft, arcSize, style = Stroke(width, cap = StrokeCap.Round))
                         }
                         // Where the push points: up for speeding up, left for a left turn, as on the circle.
-                        if (long != null && lat != null && total >= DIRECTION_MIN_G) {
+                        if (steady.shown) {
                             val x = -lat
                             val y = -long
                             val length = hypot(x, y).toFloat()
@@ -151,7 +159,7 @@ internal fun GRing(s: TelemetrySnapshot, range: Double, waiting: String?, modifi
                     }
                 }
             }
-            PedalBar(share(maxOf(0.0, long ?: 0.0), range), colors.good, R.string.peak_accel, Modifier.width(barWidth).height(ring))
+            PedalBar(share(maxOf(0.0, long), range), colors.good, R.string.peak_accel, Modifier.width(barWidth).height(ring))
         }
         }
     }
@@ -188,16 +196,15 @@ private fun PedalBar(share: Float, color: Color, @StringRes label: Int, modifier
 @Composable
 internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: String?, modifier: Modifier, large: Boolean) {
     val colors = LocalDash.current
-    val long = s.longitudinalG
-    val lat = s.lateralG
-    val total = s.totalG ?: 0.0
+    // Drawn steady: lights at a clear push, holds its place a moment, and fades only once the push has.
+    val steady = rememberSteadyPush(s, range, LIT_FRAMES)
     // The same way round as the circle: the car's movement, or the push felt in the seat.
     val sign = if (view == GView.DRIVER) -1.0 else 1.0
     // The display's own colours: cyan, then white, then red. White stays dark on a light theme, to show.
     val ringColors = listOf(WINDOW_CYAN, if (colors.isLight) colors.primary else WINDOW_WHITE, WINDOW_RED)
     // As on the display, the number and its box flash red for a moment when the push first
     // reaches its hardest, then go back to white while the red band stays lit.
-    val hot = litBandCount(s, range) == LIT_FRAMES
+    val hot = steady.lit == LIT_FRAMES
     var flash by remember { mutableStateOf(false) }
     LaunchedEffect(hot) {
         flash = hot
@@ -235,14 +242,14 @@ internal fun GWindow(s: TelemetrySnapshot, view: GView, range: Double, waiting: 
                     }
                     for (i in 0 until FRAME_COUNT) drawPath(frame(i.toFloat()), colors.track, style = Stroke(line))
 
-                    val strength = share(total, range)
+                    val strength = share(steady.total, range)
                     // How many bands light: the inner one at once, the others as the push grows.
-                    val litBands = litBandCount(s, range)
+                    val litBands = steady.lit
                     if (litBands > 0) {
                         // As on a race car's onboard display, the bands light in one of eight places
                         // around the number, the way of the push: a side, the top or bottom, or a
                         // corner between. On screen, as on the circle: x right, y down.
-                        val angle = kotlin.math.atan2(-sign * long!!, -sign * lat!!)
+                        val angle = kotlin.math.atan2(-sign * steady.placeLong(), -sign * steady.placeLat())
                         val quarter = kotlin.math.PI / 2
                         val axis = kotlin.math.round(angle / quarter) * quarter
                         // More than half way between two sides: a corner.
@@ -352,13 +359,6 @@ private const val HOT_FLASH_MS = 1_200L
 /** How strongly the number's box glows red while it flashes. */
 private const val HOT_BOX_ALPHA = 0.22f
 
-/** How many of the Window's bands a push lights: the inner one at once, the others as it grows. */
-private fun litBandCount(s: TelemetrySnapshot, range: Double): Int {
-    val total = s.totalG ?: return 0
-    if (s.longitudinalG == null || s.lateralG == null || total < DIRECTION_MIN_G) return 0
-    val strength = share(total, range)
-    return (0 until LIT_FRAMES).count { strength >= it.toFloat() / LIT_FRAMES }
-}
 private const val WINDOW_NUMBER_SHARE = 0.2f
 
 /** The dark gap kept between two lit bands, in frame-line widths, so each band stands apart. */
