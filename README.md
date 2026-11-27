@@ -10,7 +10,7 @@
 
 <p>Your car's speed and G-force on your phone, with no extra hardware.</p>
 
-<img src="docs/readme/badge-ar-license.svg" alt="الترخيص: مجاني للأفراد"> <img src="docs/readme/badge-ar-lang.svg" alt="اللغة: العربية والإنجليزية"> <img src="docs/readme/badge-ar-auto.svg" alt="Android Auto: السرعة"> <img src="docs/readme/badge-ar-obd.svg" alt="OBD-II: ELM327"> <img src="docs/readme/badge-ar-kotlin.svg" alt="مبني على: Kotlin Compose"> <img src="docs/readme/badge-ar-platform.svg" alt="المنصة: أندرويد 8.0+">
+<img src="docs/readme/badge-ar-license.svg" alt="الترخيص: مجاني للأفراد"> <img src="docs/readme/badge-ar-lang.svg" alt="اللغة: العربية والإنجليزية"> <img src="docs/readme/badge-ar-auto.svg" alt="Android Auto: السرعة"> <img src="docs/readme/badge-ar-obd.svg" alt="OBD-II: ELM327"> <img src="docs/readme/badge-ar-kotlin.svg" alt="مبني على: Kotlin Compose"> <img src="docs/readme/badge-ar-platform.svg" alt="المنصة: أندرويد 8.0 فأحدث">
 
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3ddc84?style=flat-square) ![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7f52ff?style=flat-square) ![OBD-II](https://img.shields.io/badge/OBD--II-ELM327-5cb8ff?style=flat-square) ![Android Auto](https://img.shields.io/badge/Android%20Auto-speed-5cb8ff?style=flat-square) ![Arabic and English](https://img.shields.io/badge/Arabic%20%7C%20English-4cc38a?style=flat-square) [![Free for individuals](https://img.shields.io/badge/license-free%20for%20individuals-e36209?style=flat-square)](LICENSE)
 
