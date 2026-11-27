@@ -1,8 +1,6 @@
 <div align="center">
 
-<h3 dir="rtl">بسم الله الرحمن الرحيم</h3>
-
-<h3 dir="rtl">والصلاة والسلام على نبينا محمد</h3>
+<img src="docs/readme/opening-kufic.svg" width="560" alt="بسم الله الرحمن الرحيم، والصلاة والسلام على رسول الله">
 
 <h4 dir="rtl">زخم · Zakhm</h4>
 
