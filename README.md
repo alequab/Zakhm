@@ -1,31 +1,22 @@
-<div dir="rtl" align="center">
+<div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/opening-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/opening-light.png">
-  <img src="docs/opening-dark.png" alt="بسم الله الرحمن الرحيم، والصلاة والسلام على نبينا محمد" width="560">
-</picture>
+<h3 dir="rtl">بسم الله الرحمن الرحيم</h3>
 
-<br>
+<h3 dir="rtl">والصلاة والسلام على نبينا محمد</h3>
 
-<h2>زخم · Zakhm</h2>
+<h4 dir="rtl">زخم · Zakhm</h4>
 
-**سرعة سيارتك وقوة التسارع على هاتفك، بدون أي أجهزة إضافية.**
+<p dir="rtl"><b>سرعة سيارتك وقوة التسارع على هاتفك، بدون أي أجهزة إضافية.</b></p>
 
-*Your car's speed and G-force on your phone, with no extra hardware.*
+<p>Your car's speed and G-force on your phone, with no extra hardware.</p>
 
-<br>
+<img src="docs/readme/badge-ar-license.svg" alt="الترخيص: مجاني للأفراد"> <img src="docs/readme/badge-ar-lang.svg" alt="اللغة: العربية والإنجليزية"> <img src="docs/readme/badge-ar-auto.svg" alt="Android Auto: السرعة"> <img src="docs/readme/badge-ar-obd.svg" alt="OBD-II: ELM327"> <img src="docs/readme/badge-ar-kotlin.svg" alt="مبني على: Kotlin Compose"> <img src="docs/readme/badge-ar-platform.svg" alt="المنصة: أندرويد 8.0+">
 
-![Android](https://img.shields.io/badge/Android-8.0%2B-5cb8ff?style=flat-square)
-![Kotlin](https://img.shields.io/badge/Kotlin-Compose-5cb8ff?style=flat-square)
-![OBD-II](https://img.shields.io/badge/OBD--II-ELM327-5cb8ff?style=flat-square)
-![Android Auto](https://img.shields.io/badge/Android%20Auto-speed-5cb8ff?style=flat-square)
-![Arabic and English](https://img.shields.io/badge/Arabic%20%7C%20English-4cc38a?style=flat-square)
-[![Free for individuals](https://img.shields.io/badge/license-free%20for%20individuals-4cc38a?style=flat-square)](LICENSE)
+![Android](https://img.shields.io/badge/Android-8.0%2B-3ddc84?style=flat-square) ![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7f52ff?style=flat-square) ![OBD-II](https://img.shields.io/badge/OBD--II-ELM327-5cb8ff?style=flat-square) ![Android Auto](https://img.shields.io/badge/Android%20Auto-speed-5cb8ff?style=flat-square) ![Arabic and English](https://img.shields.io/badge/Arabic%20%7C%20English-4cc38a?style=flat-square) [![Free for individuals](https://img.shields.io/badge/license-free%20for%20individuals-e36209?style=flat-square)](LICENSE)
 
-<br>
+<p dir="rtl"><a href="#العربية">العربية</a> · <a href="#المزايا">المزايا</a> · <a href="#البدء-السريع">البدء السريع</a> · <a href="#كيف-يعمل">كيف يعمل</a> · <a href="#السلامة-والخصوصية">السلامة والخصوصية</a></p>
 
-### [العربية](#العربية) &nbsp;·&nbsp; [English](#english)
+<p><a href="#english">English</a> · <a href="#features">Features</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#safety-and-privacy">Safety and privacy</a></p>
 
 </div>
 
@@ -45,7 +36,7 @@
 </tr>
 </table>
 
-<p align="center"><i>رُسمت هذه الصور من شاشات التطبيق نفسه بقراءات ورحلات تجريبية.</i></p>
+<p align="center">رُسمت هذه الصور من شاشات التطبيق نفسه بقراءات ورحلات تجريبية.</p>
 
 ### المزايا
 
@@ -160,8 +151,8 @@ flowchart LR
 
 اختر المصدر من **مصدر السرعة** في الإعدادات.
 
-- **OBD-II:** تحتاج إلى محوّل ELM327 يعمل بالبلوتوث. أقرن المحوّل الكلاسيكي من إعدادات أندرويد، أو ابحث عن محوّل Bluetooth LE من داخل التطبيق، ثم اختره.
-- **Android Auto:** فعّل وضع المطوّر في Android Auto واسمح بخيار **Unknown sources**. أبقِ التطبيق مفتوحًا على شاشة السيارة وعلى هاتفك معًا. لا تشارك كل السيارات سرعتها.
+- &rlm;**OBD-II:** تحتاج إلى محوّل ELM327 يعمل بالبلوتوث. أقرن المحوّل الكلاسيكي من إعدادات أندرويد، أو ابحث عن محوّل Bluetooth LE من داخل التطبيق، ثم اختره.
+- &rlm;**Android Auto:** فعّل وضع المطوّر في Android Auto واسمح بخيار **Unknown sources**. أبقِ التطبيق مفتوحًا على شاشة السيارة وعلى هاتفك معًا. لا تشارك كل السيارات سرعتها.
 
 تأتي قوة G دائمًا من حساسات الهاتف، أيًّا كان مصدر السرعة.
 
@@ -183,7 +174,7 @@ flowchart LR
 
 </div>
 
-يُحفظ ملف APK في المجلد `app/build/outputs/apk/debug/`. لا تتضمن النسخ المبنية من المصدر تنبيهات التحديث.
+يُحفظ ملف APK في المجلد &lrm;`app/build/outputs/apk/debug/`&lrm;. لا تتضمن النسخ المبنية من المصدر تنبيهات التحديث.
 
 | الملف | وظيفته |
 |---|---|
@@ -198,7 +189,7 @@ flowchart LR
 | `ObdLinks.kt` | الاتصال بالمحوّل بالبلوتوث الكلاسيكي وBluetooth LE |
 | `car/SpeedCarAppService.kt` | شاشة Android Auto |
 | `TelemetryScreen.kt` | شاشات التطبيق |
-| `app/src/test/` | الاختبارات |
+| &lrm;`app/src/test/`&lrm; | الاختبارات |
 
 </details>
 
@@ -224,7 +215,7 @@ flowchart LR
 </tr>
 </table>
 
-<p align="center"><i>These pictures are drawn from the app's own screens with sample readings and drives.</i></p>
+<p align="center">These pictures are drawn from the app's own screens with sample readings and drives.</p>
 
 ### Features
 
